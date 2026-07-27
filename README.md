@@ -20,10 +20,29 @@
 |---|---|
 | **Author** | Lord Intellectual |
 | **Contact** | [x.com/LordIntellectX](https://x.com/LordIntellectX) |
-| **This branch** | **`windows`** — Windows 11 port (work in progress) |
-| **Linux** | Use branch [`main`](https://github.com/LordIntellectual/vtuber-combat-chess/tree/main) |
+| **This branch** | **`windows`** — Windows 11 port |
+| **Linux** | Branch [`main`](https://github.com/LordIntellectual/vtuber-combat-chess/tree/main) |
 | **License** | [GNU GPL v3](LICENSE) |
 | **Status** | Pre-alpha — no warranty, no support |
+
+## Play on Windows (double-click — recommended)
+
+**No Visual Studio. No build. Stockfish AI included.**
+
+1. Open **[Releases](https://github.com/LordIntellectual/vtuber-combat-chess/releases)**  
+2. Download **`VTuberCombatChess-Windows.zip`**  
+3. Unzip the folder **somewhere permanent** (keep all files together)  
+4. Double-click **`VTuberCombatChess.exe`**  
+   (or `Play.bat`)
+
+The zip already contains:
+
+- `VTuberCombatChess.exe`
+- `stockfish.exe` (AI)
+- `libpng16.dll` / `z.dll`
+- `share\` (assets / audio / piece sets)
+
+**Do not** separate the `.exe` from `share\`, `stockfish.exe`, or the DLLs.
 
 ## Important: no warranty, no support, no pull requests
 
@@ -32,27 +51,23 @@ There is **no official support**. You may download, compile, and run it at your 
 
 **Pull requests are not accepted.** You may **fork** under the GPL. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Windows 11 (this branch)
+## Build from source (Windows, optional)
 
 Full instructions: **[docs/BUILD_WINDOWS.md](docs/BUILD_WINDOWS.md)**
-
-Short version (PowerShell, after installing VS 2022 C++ tools, CMake, and vcpkg libpng):
 
 ```powershell
 git clone -b windows https://github.com/LordIntellectual/vtuber-combat-chess.git
 cd vtuber-combat-chess
-$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"   # if you use vcpkg
+$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"
 .\install_and_build.ps1
-# Place stockfish.exe in local\bin or on PATH
 .\run.ps1
 ```
 
-You need a **Stockfish** Windows binary for the AI opponent (`stockfish.exe`).
+`install_and_build.ps1` downloads Stockfish and copies runtime DLLs next to the game for a portable `local\bin` layout.
 
 ## Linux
 
 Use the **`main`** branch and `./install_and_build.sh` / `./run.sh`.
-
 ## Features (pre-alpha)
 
 - Play vs **Stockfish** (or human vs human with AI off)

@@ -181,33 +181,103 @@ if (-not (Test-Path $Exe) -and (Test-Path $Alt)) {
   Copy-Item -Force $Alt $Exe
 }
 
-# Copy vcpkg DLLs next to exe if present
-if ($env:VCPKG_ROOT) {
-  $triplet = if ($env:VCPKG_DEFAULT_TRIPLET) { $env:VCPKG_DEFAULT_TRIPLET } else { "x64-windows" }
-  $dllDir = Join-Path $env:VCPKG_ROOT "installed\$triplet\bin"
-  if (Test-Path $dllDir) {
-    Log "Copying runtime DLLs from vcpkg bin..."
-    Copy-Item -Force (Join-Path $dllDir "libpng*.dll") $BinDir -ErrorAction SilentlyContinue
-    Copy-Item -Force (Join-Path $dllDir "zlib*.dll") $BinDir -ErrorAction SilentlyContinue
+# Runtime DLLs next to the exe (required for double-click without vcpkg on PATH)
+function Copy-RuntimeDlls([string]$DestDir) {
+  $copied = @()
+  $searchDirs = @()
+  if ($env:VCPKG_ROOT) {
+    $triplet = if ($env:VCPKG_DEFAULT_TRIPLET) { $env:VCPKG_DEFAULT_TRIPLET } else { "x64-windows" }
+    $searchDirs += (Join-Path $env:VCPKG_ROOT "installed\$triplet\bin")
+    $searchDirs += (Join-Path $env:VCPKG_ROOT "installed\$triplet\debug\bin")
+  }
+  $searchDirs += (Join-Path $Deps "local\bin")
+  $searchDirs += (Join-Path $Deps "local\lib")
+
+  $want = @("libpng16.dll", "libpng16d.dll", "zlib1.dll", "z.dll", "libzlib.dll")
+  foreach ($dir in $searchDirs) {
+    if (-not (Test-Path $dir)) { continue }
+    foreach ($name in $want) {
+      $src = Join-Path $dir $name
+      if (Test-Path $src) {
+        Copy-Item -Force $src $DestDir
+        $copied += $name
+      }
+    }
+    # Also grab any libpng*.dll / zlib*.dll patterns
+    Get-ChildItem -Path $dir -Filter "libpng*.dll" -ErrorAction SilentlyContinue |
+      ForEach-Object { Copy-Item -Force $_.FullName $DestDir; $copied += $_.Name }
+    Get-ChildItem -Path $dir -Filter "zlib*.dll" -ErrorAction SilentlyContinue |
+      ForEach-Object { Copy-Item -Force $_.FullName $DestDir; $copied += $_.Name }
+  }
+  if ($copied.Count -gt 0) {
+    Log ("Copied runtime DLLs: " + (($copied | Select-Object -Unique) -join ", "))
+  } else {
+    Log "WARNING: No libpng/zlib DLLs found. Copy them next to the .exe before double-clicking."
   }
 }
 
-foreach ($s in @(
-  (Join-Path $Root "tools\stockfish.exe"),
-  (Join-Path $Root "stockfish.exe")
-)) {
-  if (Test-Path $s) {
-    Copy-Item -Force $s (Join-Path $BinDir "stockfish.exe")
-    Log "Bundled stockfish.exe next to game"
-    break
+Copy-RuntimeDlls $BinDir
+
+# Stockfish next to the exe (required for AI without PATH setup)
+function Install-Stockfish([string]$DestDir) {
+  $destExe = Join-Path $DestDir "stockfish.exe"
+  if (Test-Path $destExe) {
+    Log "stockfish.exe already present next to game"
+    return
+  }
+  foreach ($s in @(
+    (Join-Path $Root "tools\stockfish\stockfish.exe"),
+    (Join-Path $Root "tools\stockfish.exe"),
+    (Join-Path $Root "third_party\stockfish\stockfish.exe"),
+    (Join-Path $Root "stockfish.exe")
+  )) {
+    if (Test-Path $s) {
+      Copy-Item -Force $s $destExe
+      Log "Bundled stockfish.exe from $s"
+      return
+    }
+  }
+
+  # Download official Stockfish Windows build (GPL-3) if missing
+  $url = "https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-windows-x86-64-avx2.zip"
+  $zip = Join-Path $Deps "downloads\stockfish-windows-x86-64-avx2.zip"
+  $extract = Join-Path $Deps "downloads\stockfish_extract"
+  New-Item -ItemType Directory -Force -Path (Split-Path $zip) | Out-Null
+  try {
+    if (-not (Test-Path $zip)) {
+      Log "Downloading Stockfish (Windows x86-64 AVX2)..."
+      Invoke-WebRequest -Uri $url -OutFile $zip
+    }
+    if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
+    Expand-Archive -Path $zip -DestinationPath $extract -Force
+    $found = Get-ChildItem -Path $extract -Recurse -Filter "stockfish*.exe" |
+      Where-Object { $_.Name -match "windows" -or $_.Name -eq "stockfish.exe" } |
+      Select-Object -First 1
+    if (-not $found) {
+      $found = Get-ChildItem -Path $extract -Recurse -Filter "*.exe" | Select-Object -First 1
+    }
+    if ($found) {
+      Copy-Item -Force $found.FullName $destExe
+      Log "Installed stockfish.exe from official release ($($found.Name))"
+    } else {
+      Log "WARNING: Stockfish zip extracted but no .exe found"
+    }
+  } catch {
+    Log "WARNING: Could not download Stockfish: $_"
+    Log "Place stockfish.exe next to VTuberCombatChess.exe for AI support."
   }
 }
+
+Install-Stockfish $BinDir
 
 if (-not (Test-Path $Exe)) {
   throw "VTuberCombatChess.exe not found after build. Check build log above."
 }
 
+# Verify double-click layout
+$sfOk = Test-Path (Join-Path $BinDir "stockfish.exe")
+$shareOk = (Test-Path (Join-Path $BinDir "share\toonchess")) -and (Test-Path (Join-Path $BinDir "share\nca"))
 Log "Done."
 Log "Executable: $Exe"
-Log "Run: .\run.ps1"
-Log "Stockfish: place stockfish.exe in local\bin or on PATH (or set VCC_STOCKFISH)"
+Log "Portable layout ready for double-click: share=$shareOk stockfish=$sfOk"
+Log "Run: .\run.ps1   OR double-click: $Exe"

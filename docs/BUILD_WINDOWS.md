@@ -6,8 +6,13 @@ Repo: https://github.com/LordIntellectual/vtuber-combat-chess
 **Author:** Lord Intellectual  
 **Status:** Pre-alpha. No warranty, no support.
 
-This guide incorporates hard-won fixes from the 2026-07-27 Windows build session
-(GLAD OpenGL loader, MSVC `and`/`M_PI`, Bullet manual install, ASCII PowerShell).
+> **Players:** you do **not** need this document. Download the portable zip from  
+> [GitHub Releases](https://github.com/LordIntellectual/vtuber-combat-chess/releases),  
+> unzip, and double-click `VTuberCombatChess.exe` (Stockfish AI included).
+
+This guide is for **developers** building from source. It incorporates hard-won
+fixes from the 2026-07-27 Windows build session (GLAD, MSVC tokens, Bullet
+install, ASCII PowerShell, pure-C GLAD lib, Stockfish + DLL bundling).
 
 ## Prerequisites (once)
 

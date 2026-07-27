@@ -76,15 +76,72 @@ static int movetimeMsForSkill(int skill){
   return 2000;
 }
 
+/** True if path exists as a regular file. */
+static bool fileExistsPath(const std::string& p){
+#ifdef _WIN32
+  DWORD attr = GetFileAttributesA(p.c_str());
+  return attr != INVALID_FILE_ATTRIBUTES &&
+         !(attr & FILE_ATTRIBUTE_DIRECTORY);
+#else
+  return access(p.c_str(), X_OK) == 0 || access(p.c_str(), R_OK) == 0;
+#endif
+}
+
+/** Directory containing this process's executable, with trailing slash. */
+static std::string executableDir(){
+#ifdef _WIN32
+  char buf[MAX_PATH];
+  DWORD n = GetModuleFileNameA(NULL, buf, MAX_PATH);
+  if(n == 0 || n >= MAX_PATH) return "";
+  std::string path(buf, n);
+  size_t slash = path.find_last_of("\\/");
+  if(slash == std::string::npos) return "";
+  return path.substr(0, slash + 1);
+#else
+  char buf[4096];
+  ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  if(n <= 0) return "";
+  buf[n] = '\0';
+  std::string path(buf);
+  size_t slash = path.find_last_of('/');
+  if(slash == std::string::npos) return "";
+  return path.substr(0, slash + 1);
+#endif
+}
+
 /** Resolve stockfish executable name/path for CreateProcess / execlp. */
 static std::string stockfishCommand(){
   // Optional override: full path to the engine binary
   const char* env = std::getenv("VCC_STOCKFISH");
-  if(env && env[0]) return std::string(env);
+  if(env && env[0] && fileExistsPath(env)) return std::string(env);
   env = std::getenv("STOCKFISH");
-  if(env && env[0]) return std::string(env);
+  if(env && env[0] && fileExistsPath(env)) return std::string(env);
+
+  // Prefer engine next to this game binary (portable / double-click layout)
+  const std::string dir = executableDir();
+  if(!dir.empty()){
 #ifdef _WIN32
-  return "stockfish.exe";
+    const char* names[] = {
+      "stockfish.exe",
+      "stockfish-windows-x86-64-avx2.exe",
+      "stockfish-windows-x86-64.exe",
+      "stockfish-windows-x86-64-sse41-popcnt.exe",
+      "stockfish-windows-x86-64-bmi2.exe",
+    };
+#else
+    const char* names[] = {
+      "stockfish",
+      "stockfish_x64",
+    };
+#endif
+    for(const char* name : names){
+      std::string cand = dir + name;
+      if(fileExistsPath(cand)) return cand;
+    }
+  }
+
+#ifdef _WIN32
+  return "stockfish.exe"; // last resort: PATH / CreateProcess search
 #else
   return "stockfish";
 #endif
@@ -195,12 +252,13 @@ static void startCommunicationWindows(StockfishConnector* self,
   si.hStdError = childStdOutWr; // merge stderr so banner is not lost
 
   std::string cmd = stockfishCommand();
-  // CreateProcess may modify the command line buffer
-  std::vector<char> cmdBuf(cmd.begin(), cmd.end());
+  // Quote command line for paths with spaces; also pass full path as application name
+  std::string cmdLine = "\"" + cmd + "\"";
+  std::vector<char> cmdBuf(cmdLine.begin(), cmdLine.end());
   cmdBuf.push_back('\0');
 
   BOOL ok = CreateProcessA(
-    NULL,
+    fileExistsPath(cmd) ? cmd.c_str() : NULL,
     cmdBuf.data(),
     NULL,
     NULL,

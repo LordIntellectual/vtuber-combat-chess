@@ -20,9 +20,15 @@ set(ToonChess_VERSION_MINOR 2)
 set(TOONCHESS_SHARE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/share)
 
 # Mesh shaders still live under share/toonchess (base assets).
-# Use forward slashes so the generated string is valid on Windows and Linux.
-file(TO_CMAKE_PATH "${CMAKE_INSTALL_PREFIX}/share/toonchess/" _VCC_SHARE_CMAKE)
-set(TOONCHESS_SHARE_PATH "\"${_VCC_SHARE_CMAKE}\"")
+# Prefer runtime discovery next to the executable (portable double-click layout).
+# Compile-time fallback: relative path on Windows (never embed C:/Users/...), install
+# prefix on Linux.
+if(WIN32)
+  set(TOONCHESS_SHARE_PATH "\"./share/toonchess/\"")
+else()
+  file(TO_CMAKE_PATH "${CMAKE_INSTALL_PREFIX}/share/toonchess/" _VCC_SHARE_CMAKE)
+  set(TOONCHESS_SHARE_PATH "\"${_VCC_SHARE_CMAKE}\"")
+endif()
 configure_file (
     "${CMAKE_SOURCE_DIR}/src/get_share_path.cxx.in"
     "${CMAKE_SOURCE_DIR}/src/get_share_path.cxx"
