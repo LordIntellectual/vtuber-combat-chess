@@ -21,8 +21,17 @@
 | **Author** | Lord Intellectual |
 | **Contact** | [x.com/LordIntellectX](https://x.com/LordIntellectX) |
 | **Platform (this branch)** | Linux (tested on Ubuntu / Zorin-class systems) |
+| **Windows** | Portable zip on [Releases](https://github.com/LordIntellectual/vtuber-combat-chess/releases) (branch `windows`) |
 | **License** | [GNU GPL v3](LICENSE) |
 | **Status** | Pre-alpha — menus, assets, and sounds are not final |
+
+## Play on Windows (double-click)
+
+1. Open **[Releases](https://github.com/LordIntellectual/vtuber-combat-chess/releases)**  
+2. Download **`VTuberCombatChess-Windows.zip`**  
+3. Unzip and double-click **`VTuberCombatChess.exe`**  
+
+Stockfish AI and assets are included. Keep the unzipped folder together.
 
 ## Important: no warranty, no support, no pull requests
 
