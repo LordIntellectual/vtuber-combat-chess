@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <random>
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include <btBulletDynamicsCommon.h>
 

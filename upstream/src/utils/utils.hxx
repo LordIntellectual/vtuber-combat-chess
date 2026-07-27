@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 /* Function used to load files like shader source code
   \param path The path to the file that you want to load

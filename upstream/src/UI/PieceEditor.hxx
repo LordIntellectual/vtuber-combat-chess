@@ -4,7 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 #include "../PieceSet/PieceSet.hxx"
 #include "../PieceSet/PieceTransform.hxx"
 #include "../mesh/Mesh.hxx"

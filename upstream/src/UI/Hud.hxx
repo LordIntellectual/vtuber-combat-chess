@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 #include "../Theme/Theme.hxx"
 
 class PieceSetManager;

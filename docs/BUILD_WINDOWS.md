@@ -1,28 +1,27 @@
 # Building vTuber Combat Chess on Windows 11
 
-This document is for the **`windows` branch** of  
-https://github.com/LordIntellectual/vtuber-combat-chess
+Branch: **`windows`**  
+Repo: https://github.com/LordIntellectual/vtuber-combat-chess  
 
 **Author:** Lord Intellectual  
-**Status:** Pre-alpha Windows port — expect rough edges. No warranty, no support.
+**Status:** Pre-alpha. No warranty, no support.
 
-## What you need
+This guide incorporates hard-won fixes from the 2026-07-27 Windows build session
+(GLAD OpenGL loader, MSVC `and`/`M_PI`, Bullet manual install, ASCII PowerShell).
+
+## Prerequisites (once)
 
 | Tool | Notes |
 |------|--------|
-| **Windows 11** x64 | Target platform for this branch |
-| **CMake** 3.16+ | https://cmake.org/download/ (add to PATH) |
-| **Visual Studio 2022** | “Desktop development with C++” workload, **or** Build Tools only |
-| **Git** | For GLFW fetch during configure |
-| **libpng + zlib** | Easiest via **vcpkg** (see below) |
-| **Stockfish** | `stockfish.exe` on PATH, next to the game, or set `VCC_STOCKFISH` |
-| **GPU drivers** | OpenGL-capable GPU |
+| Windows 11 x64 | |
+| **Visual Studio 2022** | Workload: **Desktop development with C++** (MSVC v143 + Windows SDK). Required for vcpkg and the game. |
+| **CMake** 3.16+ | On PATH (`cmake --version`) |
+| **Git for Windows** | Installer option: *Git from the command line and also from 3rd-party software* |
+| **vcpkg** | `libpng` + `zlib` for x64-windows |
+| **Stockfish** | `stockfish.exe` for AI (optional until you enable AI) |
+| GPU drivers | OpenGL 3.3+ compatible |
 
-Optional: **Ninja** build tool if not using the Visual Studio generator.
-
-## One-time: vcpkg for libpng
-
-In PowerShell (example):
+### vcpkg
 
 ```powershell
 cd $env:USERPROFILE
@@ -30,14 +29,22 @@ git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg
 .\bootstrap-vcpkg.bat
 .\vcpkg install libpng:x64-windows zlib:x64-windows
-$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"
+# Permanent:
+setx VCPKG_ROOT "$env:USERPROFILE\vcpkg"
 ```
 
-Keep `VCPKG_ROOT` set for the build session (or add permanently in System Environment Variables).
-
-## Clone this branch
+Open a **new** PowerShell after `setx`. Confirm:
 
 ```powershell
+echo $env:VCPKG_ROOT
+```
+
+If vcpkg says it cannot find Visual Studio, open **Visual Studio Installer → Modify** and enable **Desktop development with C++**.
+
+## Clone the windows branch
+
+```powershell
+cd $env:USERPROFILE\Videos
 git clone -b windows https://github.com/LordIntellectual/vtuber-combat-chess.git
 cd vtuber-combat-chess
 ```
@@ -45,31 +52,27 @@ cd vtuber-combat-chess
 ## Build
 
 ```powershell
-# Allow script for this session only if needed
 Set-ExecutionPolicy -Scope Process Bypass
-
-# Ensure vcpkg is visible
-$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"   # adjust if different
-
+# ensure vcpkg is visible in this session
+$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"   # adjust if needed
 .\install_and_build.ps1
 ```
 
-This will:
+The script:
 
-1. Download and build **Bullet 2.87** into `deps\local`
-2. Configure/build **VTuberCombatChess** with CMake
-3. Install into `local\` and copy `share\` next to the `.exe` for portable asset discovery
+1. Downloads/builds **Bullet 2.87** and **copies** Release `.lib` + headers into `deps\local` (VS multi-config install is unreliable for Bullet 2.87).
+2. Configures the game with `BULLET_ROOT` and CMake package-root policies.
+3. Builds with **GLAD** (vendored OpenGL 3.3 compatibility loader).
+4. Installs into `local\` and copies `share\` next to the `.exe`.
+5. Copies libpng/zlib DLLs from vcpkg when available.
 
-## Stockfish (AI opponent)
+## Stockfish
 
-Download a Windows Stockfish binary (e.g. from https://stockfishchess.org/download/ ) and either:
+Download Windows Stockfish, then either:
 
 - Copy `stockfish.exe` into `local\bin\`, or  
-- Put it on your system `PATH`, or  
-- Set environment variable:  
-  `setx VCC_STOCKFISH "C:\path\to\stockfish.exe"`
-
-Without Stockfish the game still launches; AI will fail if left ON (toggle with **A**).
+- Put it on `PATH`, or  
+- `setx VCC_STOCKFISH "C:\full\path\to\stockfish.exe"`
 
 ## Run
 
@@ -77,43 +80,57 @@ Without Stockfish the game still launches; AI will fail if left ON (toggle with 
 .\run.ps1
 ```
 
-Or double-click `local\bin\VTuberCombatChess.exe` (ensure `local\bin\share\` exists and Stockfish is available).
-
-## Portable folder layout (after install)
+## Portable layout
 
 ```
 local\bin\
   VTuberCombatChess.exe
-  stockfish.exe          (you add this)
+  stockfish.exe          (you add)
+  libpng16.dll / zlib1.dll  (from vcpkg copy step)
   share\
-    toonchess\           # base meshes / shaders
-    nca\                 # audio, piece sets, FX
+    toonchess\
+    nca\
 ```
 
-The game also checks env `VCC_SHARE` if you relocate assets.
+## What changed after the first Windows report
 
-## Reporting issues
+| Issue | Fix on this branch |
+|-------|--------------------|
+| Unicode `...` in `.ps1` broke PS 5.1 | Script is **ASCII-only** |
+| Bullet `cmake --install` empty | Explicit copy of libs + headers |
+| `BULLET_ROOT` ignored | `CMP0074` / `CMP0144` NEW in CMakeLists + script flags |
+| OpenGL symbols missing on MSVC | Vendored **GLAD** + `vccInitGL()` after context |
+| `and` / `or` / `not` | `/FI msvc_compat.hxx` includes `<ciso646>` |
+| `M_PI` undeclared | `_USE_MATH_DEFINES` + `M_PI` fallback in force-include |
 
-There is **no official support**. If you report problems to the author for personal builds, include:
+## If configure still fails
 
-- Windows version  
-- GPU / driver  
-- Full console output  
-- Whether Stockfish started (`[Stockfish] Engine ready`)  
-- Steps to reproduce  
+Manual configure (single invocation, proven pattern):
 
-Pull requests are not accepted on the public repo; forks are fine under GPL-3.
+```powershell
+cmake -G "Visual Studio 17 2022" -A x64 -S upstream -B build `
+  -DCMAKE_INSTALL_PREFIX="$PWD\local" `
+  -DCMAKE_PREFIX_PATH="$PWD\deps\local;$env:VCPKG_ROOT\installed\x64-windows" `
+  -DBULLET_ROOT="$PWD\deps\local" `
+  -DCMAKE_POLICY_DEFAULT_CMP0074=NEW `
+  -DCMAKE_POLICY_DEFAULT_CMP0144=NEW `
+  -DCMAKE_BUILD_TYPE=Release
 
-## Relation to Linux / Nightfire
+cmake --build build --config Release --parallel
+cmake --install build --config Release
+```
 
-- GitHub **`main`** = Linux-first  
-- GitHub **`windows`** = this Windows port work  
-- Local Nightfire tree is separate; this public repo is standalone  
+## Reporting failures
 
-## Known Windows caveats (honest)
+No official support. If reporting to the author for personal builds, include:
 
-- First-time CMake + Bullet build can take a long time  
-- libpng must be found via `CMAKE_PREFIX_PATH` / vcpkg  
-- Antivirus may flag unsigned `.exe` or Stockfish downloads  
-- OpenGL compatibility context is required (same as Linux HUD)  
-- Path with non-ASCII characters may confuse older tools — prefer ASCII paths  
+- Step (script / configure / compile / run)
+- Full console text
+- Whether `[GL] glad loaded` and `[Stockfish] Engine ready` appear
+- GPU name for graphics issues
+
+**Do not** paste local Windows account paths into public GitHub issues (Issues are disabled anyway). Prefer redacting `C:\Users\<name>\...`.
+
+## License / policy
+
+GPL-3. No warranty. Pull requests not accepted; forks OK.

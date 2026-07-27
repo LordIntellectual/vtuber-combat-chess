@@ -2,7 +2,7 @@
 #include <cmath>
 #include <iostream>
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include "math.hxx"
 

@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 class Vector2i
 {

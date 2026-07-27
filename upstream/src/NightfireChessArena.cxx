@@ -1,6 +1,4 @@
-#define GL_GLEXT_PROTOTYPES
-
-#include <GLFW/glfw3.h>
+#include "gl_compat.hxx"
 #include <exception>
 #include <map>
 #include <iostream>
@@ -333,13 +331,20 @@ void celShadingRender(
 int main() {
   if (!glfwInit()) return 1;
   glfwWindowHint(GLFW_SAMPLES, ANTIALIASING_HIGH);
-  // Request compatibility profile for fixed-function HUD
+  // Compatibility profile required for fixed-function HUD (stb_easy_font)
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 
   GLFWwindow* window = glfwCreateWindow(width, height, "vTuber Combat Chess", NULL, NULL);
   if (!window) { glfwTerminate(); return 1; }
   glfwMakeContextCurrent(window);
+  if (!vccInitGL()) {
+    std::cerr << "[GL] Failed to load OpenGL entry points (GLAD)\n";
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 1;
+  }
   glEnable(GL_MULTISAMPLE);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);

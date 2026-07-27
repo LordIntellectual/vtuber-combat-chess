@@ -6,6 +6,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Linux (main) and Windows 11 (windows branch)
 project(VTuberCombatChess)
 
+# Allow find_package(Bullet) to honor BULLET_ROOT / <PackageName>_ROOT (CMake 3.12+)
+if(POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
+endif()
+
 set(ToonChess_VERSION_MAJOR 0)
 set(ToonChess_VERSION_MINOR 2)
 
@@ -68,20 +76,33 @@ if(EXISTS "${NCA_SHARE_DIR}")
 endif()
 
 set(EXECUTABLE_NAME "VTuberCombatChess")
-add_executable(${EXECUTABLE_NAME} src/NightfireChessArena.cxx ${CXX_FILES})
+# Vendored GLAD (OpenGL 3.3 compatibility) — required on Windows; used on all platforms
+set(GLAD_SRC ${CMAKE_SOURCE_DIR}/third_party/glad/src/gl.c)
+add_executable(${EXECUTABLE_NAME}
+  src/NightfireChessArena.cxx
+  ${CXX_FILES}
+  ${GLAD_SRC}
+)
 target_include_directories(${EXECUTABLE_NAME} PRIVATE
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/third_party
+  ${CMAKE_SOURCE_DIR}/third_party/glad/include
 )
+# gl.c is C; ensure C language enabled
+enable_language(C)
 
 if(MSVC)
   target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
     _CRT_SECURE_NO_WARNINGS
     NOMINMAX
     WIN32_LEAN_AND_MEAN
+    _USE_MATH_DEFINES
   )
-  # MSVC: enable /EHsc exceptions; GLFW needs common runtime
-  target_compile_options(${EXECUTABLE_NAME} PRIVATE /W3 /EHsc)
+  # Force M_PI + iso646 alternative tokens (and/or/not) on every TU
+  target_compile_options(${EXECUTABLE_NAME} PRIVATE
+    /W3 /EHsc
+    "/FI${CMAKE_SOURCE_DIR}/src/platform/msvc_compat.hxx"
+  )
 endif()
 
 # Download and unpack glfw

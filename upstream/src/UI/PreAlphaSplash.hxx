@@ -1,7 +1,7 @@
 #ifndef NCA_PRE_ALPHA_SPLASH_HXX_
 #define NCA_PRE_ALPHA_SPLASH_HXX_
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 /**
  * Blocking pre-alpha disclaimer shown at game start, before board input.

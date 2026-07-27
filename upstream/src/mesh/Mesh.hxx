@@ -1,7 +1,7 @@
 #ifndef MESH_HXX_
 #define MESH_HXX_
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include <vector>
 

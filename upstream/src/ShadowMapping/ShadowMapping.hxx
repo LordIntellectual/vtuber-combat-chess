@@ -1,7 +1,7 @@
 #ifndef SHADOWMAPPING_HXX_
 #define SHADOWMAPPING_HXX_
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include <map>
 

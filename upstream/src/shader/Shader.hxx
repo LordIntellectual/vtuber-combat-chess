@@ -1,7 +1,7 @@
 #ifndef SHADER_HXX_
 #define SHADER_HXX_
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include <string>
 

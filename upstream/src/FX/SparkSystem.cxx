@@ -1,5 +1,4 @@
-#define GL_GLEXT_PROTOTYPES
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include "SparkSystem.hxx"
 #include "../get_share_path.hxx"

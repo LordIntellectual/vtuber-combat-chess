@@ -1,11 +1,9 @@
-#define GL_GLEXT_PROTOTYPES
-
 #include <vector>
 #include <string>
 #include <algorithm>
 #include <iostream>
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 #include "../shader/shaderPrograms.hxx"
 #include "../utils/utils.hxx"

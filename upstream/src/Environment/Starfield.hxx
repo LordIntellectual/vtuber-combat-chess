@@ -4,7 +4,7 @@
 #include <vector>
 #include <random>
 #include <string>
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 #include "../utils/math.hxx"
 #include "../Camera/Camera.hxx"
 #include "../Clock/Clock.hxx"

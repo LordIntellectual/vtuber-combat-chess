@@ -1,5 +1,4 @@
-#define GL_GLEXT_PROTOTYPES
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 #include "Starfield.hxx"
 #include "../utils/utils.hxx"
 #include "../utils/GlState.hxx"

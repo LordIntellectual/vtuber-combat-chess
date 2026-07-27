@@ -1,7 +1,7 @@
 #ifndef CLOCK_HXX_
 #define CLOCK_HXX_
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 class Clock
 {

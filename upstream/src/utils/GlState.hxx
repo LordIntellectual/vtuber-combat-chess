@@ -1,7 +1,7 @@
 #ifndef NCA_GL_STATE_HXX_
 #define NCA_GL_STATE_HXX_
 
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 
 /* Full reset of GL state that smoke / sparks / cel / shadow passes may leave
    dirty. Call before any fixed-function or env-texture sky/sun draw. */
