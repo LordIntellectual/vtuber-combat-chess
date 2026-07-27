@@ -1,0 +1,23 @@
+vTuber Combat Chess
+Author / direction: Lord Intellectual
+Contact: https://x.com/LordIntellectX
+
+This program is free software under the GNU General Public License version 3
+(see LICENSE). There is NO WARRANTY; not even for MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the License for details.
+
+This project is provided as-is for people to download, compile, and run.
+There is no official support. Bug reports and pull requests are not accepted.
+You may fork the repository and maintain your own version under the GPL.
+
+Portions derived from ToonChess
+  Copyright (C) 2017-2018 Martin Renou
+  https://github.com/martinRenou/ToonChess
+  Licensed under the GNU General Public License version 3.
+
+Additional implementation assistance included AI coding agents
+(including Grok / xAI and others) under Lord Intellectual's direction.
+
+Runtime dependency (not bundled): Stockfish chess engine.
+GLFW is downloaded at configure time by CMake.
+Bullet Physics 2.87 is downloaded and built locally by install_and_build.sh.

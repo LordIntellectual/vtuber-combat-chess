@@ -1,0 +1,43 @@
+language: c++
+
+before_install:
+  # Start display (Needed for tests with glfw)
+  - export DISPLAY=:99.0
+  - sh -e /etc/init.d/xvfb start
+
+  # Install dependencies
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq cmake stockfish xorg-dev freeglut3-dev
+
+  # Install valgrind for checking memory leaks on tests
+  - sudo apt-get install -qq valgrind
+
+  # Install cppcheck (version provided by apt is too old)
+  - wget github.com/danmar/cppcheck/releases/download/1.81/cppcheck-1.81.tar.gz
+  - tar -xvf cppcheck-1.81.tar.gz
+  - pushd cppcheck-1.81/
+  - make -j6 SRCDIR=build CFGDIR=/usr/share/cppcheck/ HAVE_RULES=yes CXXFLAGS="-O2 -DNDEBUG -Wall -Wno-sign-compare -Wno-unused-function"
+  - sudo make install CFGDIR=/usr/share/cppcheck/
+  - popd
+
+  # Install Bullet Physics
+  - wget https://github.com/bulletphysics/bullet3/archive/2.87.tar.gz
+  - tar -xzf 2.87.tar.gz
+  - pushd bullet3-2.87/
+  - mkdir build
+  - pushd build
+  - cmake .. -DBUILD_EXTRAS=OFF -DBUILD_BULLET2_DEMOS=OFF -DBUILD_CPU_DEMOS=OFF -DBUILD_OPENGL3_DEMOS=OFF -DBUILD_UNIT_TESTS=OFF -DBUILD_PYBULLET=OFF
+  - sudo make -j6 install
+  - popd
+  - popd
+
+  - export PATH=/usr/games:$PATH
+
+script:
+  - cppcheck --quiet --error-exitcode=1 --enable=all --inline-suppr src/
+  - mkdir build
+  - cd build
+  - cmake -DTOONCHESS_BUILD_TESTS=ON ..
+  - sudo make -j6 install
+  - ./toonchess_tests
+  - valgrind --leak-check=full --track-origins=yes --error-exitcode=1 ./toonchess_tests

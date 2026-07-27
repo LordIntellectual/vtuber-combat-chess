@@ -1,0 +1,4 @@
+newmtl rook
+Ka 1 1 1
+Kd 1 1 1
+map_Kd rook.png
