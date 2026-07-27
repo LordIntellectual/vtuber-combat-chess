@@ -1,5 +1,19 @@
 # vTuber Combat Chess
 
+![vTuber Combat Chess title](docs/promo/title.png)
+
+![Gameplay](docs/promo/gameplay.gif)
+
+![Screenshot 1](docs/promo/screenshot_01.png)
+
+![Screenshot 2](docs/promo/screenshot_02.png)
+
+![Screenshot 3](docs/promo/screenshot_03.png)
+
+![Screenshot 4](docs/promo/screenshot_04.png)
+
+---
+
 **Pre-alpha** 3D combat chess for streams — cel-shaded pieces, capture destruction, themed stages, and streamer-friendly controls.
 
 | | |
@@ -81,7 +95,7 @@ vtuber-combat-chess/
 ├── run.sh
 ├── share/nca/              # audio, piece sets, shaders, textures
 ├── tools/                  # asset helpers
-├── docs/                   # design notes / gallery
+├── docs/                   # design notes / gallery / promo
 └── upstream/               # C++ source (ToonChess-derived)
 ```
 
