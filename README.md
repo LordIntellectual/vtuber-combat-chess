@@ -20,16 +20,38 @@
 |---|---|
 | **Author** | Lord Intellectual |
 | **Contact** | [x.com/LordIntellectX](https://x.com/LordIntellectX) |
-| **Platform (this branch)** | Linux (tested on Ubuntu / Zorin-class systems) |
+| **This branch** | **`windows`** — Windows 11 port (work in progress) |
+| **Linux** | Use branch [`main`](https://github.com/LordIntellectual/vtuber-combat-chess/tree/main) |
 | **License** | [GNU GPL v3](LICENSE) |
-| **Status** | Pre-alpha — menus, assets, and sounds are not final |
+| **Status** | Pre-alpha — no warranty, no support |
 
 ## Important: no warranty, no support, no pull requests
 
 This software is provided **as is**, with **no warranty** of any kind.  
 There is **no official support**. You may download, compile, and run it at your own risk.
 
-**Pull requests are not accepted.** You are free to **fork** the repository and maintain your own version under the GPL. See [CONTRIBUTING.md](CONTRIBUTING.md).
+**Pull requests are not accepted.** You may **fork** under the GPL. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Windows 11 (this branch)
+
+Full instructions: **[docs/BUILD_WINDOWS.md](docs/BUILD_WINDOWS.md)**
+
+Short version (PowerShell, after installing VS 2022 C++ tools, CMake, and vcpkg libpng):
+
+```powershell
+git clone -b windows https://github.com/LordIntellectual/vtuber-combat-chess.git
+cd vtuber-combat-chess
+$env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"   # if you use vcpkg
+.\install_and_build.ps1
+# Place stockfish.exe in local\bin or on PATH
+.\run.ps1
+```
+
+You need a **Stockfish** Windows binary for the AI opponent (`stockfish.exe`).
+
+## Linux
+
+Use the **`main`** branch and `./install_and_build.sh` / `./run.sh`.
 
 ## Features (pre-alpha)
 
@@ -39,32 +61,6 @@ There is **no official support**. You may download, compile, and run it at your 
 - Themes: Cyber Neon Lounge, Bioluminescent Jungle, Starship Over a Star
 - Piece sets including classic, starship, space, and vTuber-style sets
 - Streamer HUD, settings (sound / video / gameplay)
-
-## Requirements (Linux)
-
-- Display with OpenGL
-- CMake 3.5+, C++11 compiler (`build-essential`)
-- Development packages: OpenGL / X11 (`xorg-dev`, `freeglut3-dev`), `libpng-dev`, `zlib1g-dev`, `pkg-config`
-- **stockfish** on `PATH` (often `/usr/games/stockfish`)
-- Network on first build (downloads **Bullet** and **GLFW**)
-
-On Debian / Ubuntu / Zorin:
-
-```bash
-sudo apt-get install -y build-essential cmake curl stockfish \
-  xorg-dev freeglut3-dev libpng-dev zlib1g-dev pkg-config
-```
-
-## Build & run
-
-```bash
-git clone https://github.com/LordIntellectual/vtuber-combat-chess.git
-cd vtuber-combat-chess
-./install_and_build.sh
-./run.sh
-```
-
-First build compiles Bullet into `deps/local/` (can take several minutes), then builds the game into `local/bin/VTuberCombatChess`.
 
 ## Controls (summary)
 
@@ -83,22 +79,6 @@ First build compiles Bullet into `deps/local/` (can take several minutes), then 
 | **RMB drag** | Orbit camera |
 | **LMB** | Select / move |
 
-## Layout
-
-```
-vtuber-combat-chess/
-├── README.md
-├── LICENSE                 # GPL-3
-├── NOTICE
-├── CONTRIBUTING.md
-├── install_and_build.sh    # Bullet + game
-├── run.sh
-├── share/nca/              # audio, piece sets, shaders, textures
-├── tools/                  # asset helpers
-├── docs/                   # design notes / gallery / promo
-└── upstream/               # C++ source (ToonChess-derived)
-```
-
 ## Credits
 
 - **Author / direction:** Lord Intellectual  
@@ -106,10 +86,6 @@ vtuber-combat-chess/
 - **AI opponent:** [Stockfish](https://stockfishchess.org/) (install separately)  
 - **Physics:** Bullet Physics 2.87  
 - **Implementation assistance:** AI coding agents (including Grok / xAI and others), under Lord Intellectual’s direction  
-
-## Windows
-
-A Windows 11 port is planned on a separate branch of this repository. This **main** branch targets **Linux only**.
 
 ## License
 

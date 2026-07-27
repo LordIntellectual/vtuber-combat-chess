@@ -1,7 +1,9 @@
 cmake_minimum_required (VERSION 3.5)
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # vTuber Combat Chess — Lord Intellectual (ToonChess-derived)
+# Linux (main) and Windows 11 (windows branch)
 project(VTuberCombatChess)
 
 set(ToonChess_VERSION_MAJOR 0)
@@ -9,8 +11,10 @@ set(ToonChess_VERSION_MINOR 2)
 
 set(TOONCHESS_SHARE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/share)
 
-# Mesh shaders still live under share/toonchess (base assets)
-set(TOONCHESS_SHARE_PATH "\"${CMAKE_INSTALL_PREFIX}/share/toonchess/\"")
+# Mesh shaders still live under share/toonchess (base assets).
+# Use forward slashes so the generated string is valid on Windows and Linux.
+file(TO_CMAKE_PATH "${CMAKE_INSTALL_PREFIX}/share/toonchess/" _VCC_SHARE_CMAKE)
+set(TOONCHESS_SHARE_PATH "\"${_VCC_SHARE_CMAKE}\"")
 configure_file (
     "${CMAKE_SOURCE_DIR}/src/get_share_path.cxx.in"
     "${CMAKE_SOURCE_DIR}/src/get_share_path.cxx"
@@ -70,12 +74,26 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE
   ${CMAKE_SOURCE_DIR}/third_party
 )
 
+if(MSVC)
+  target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+  )
+  # MSVC: enable /EHsc exceptions; GLFW needs common runtime
+  target_compile_options(${EXECUTABLE_NAME} PRIVATE /W3 /EHsc)
+endif()
+
 # Download and unpack glfw
 configure_file(CMakeLists-glfw.txt.in glfw-download/CMakeLists.txt)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
+# New CMake rejects very old cmake_minimum_required inside ExternalProject trees
+set(ENV{CMAKE_POLICY_VERSION_MINIMUM} "3.5")
+execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}"
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 .
   RESULT_VARIABLE result
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/glfw-download
 )
@@ -112,8 +130,15 @@ if(PNG_FOUND)
   target_link_libraries(${EXECUTABLE_NAME} ${PNG_LIBRARIES})
 endif()
 
-# miniaudio needs pthread / dl on Linux
+# miniaudio: Threads on all platforms; dl + libm on Unix only
 find_package(Threads REQUIRED)
-target_link_libraries(${EXECUTABLE_NAME} Threads::Threads ${CMAKE_DL_LIBS} m)
+target_link_libraries(${EXECUTABLE_NAME} Threads::Threads)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(${EXECUTABLE_NAME} ${CMAKE_DL_LIBS} m)
+endif()
+if(WIN32)
+  # WASAPI / winmm used by miniaudio backends
+  target_link_libraries(${EXECUTABLE_NAME} winmm ole32)
+endif()
 
 install(TARGETS VTuberCombatChess RUNTIME DESTINATION bin)

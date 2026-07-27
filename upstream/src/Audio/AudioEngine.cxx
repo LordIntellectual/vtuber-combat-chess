@@ -15,6 +15,8 @@ AudioEngine::~AudioEngine() { shutdown(); }
 
 bool AudioEngine::init(const std::string& audioDir) {
   dir = audioDir;
+  for (size_t i = 0; i < dir.size(); ++i)
+    if (dir[i] == '\\') dir[i] = '/';
   if (!dir.empty() && dir.back() != '/') dir.push_back('/');
 
   ma_engine* eng = new ma_engine();

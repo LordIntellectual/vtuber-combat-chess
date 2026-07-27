@@ -4,8 +4,17 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
 #include <dirent.h>
 #include <sys/stat.h>
+#endif
 
 #include "../mesh/loadObjFile.hxx"
 #include "../constants.hxx"
@@ -14,14 +23,53 @@
 
 namespace {
 
+std::string ensureTrailingSlash(std::string p) {
+  for (size_t i = 0; i < p.size(); ++i)
+    if (p[i] == '\\') p[i] = '/';
+  if (!p.empty() && p.back() != '/') p.push_back('/');
+  return p;
+}
+
 bool isDir(const std::string& p) {
+#ifdef _WIN32
+  DWORD attr = GetFileAttributesA(p.c_str());
+  return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+#else
   struct stat st {};
   return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+#endif
 }
 
 bool fileExists(const std::string& p) {
   std::ifstream f(p);
   return f.good();
+}
+
+/** List immediate subdirectory names under root (not recursive). */
+std::vector<std::string> listSubdirNames(const std::string& root) {
+  std::vector<std::string> names;
+#ifdef _WIN32
+  std::string pattern = root + "*";
+  WIN32_FIND_DATAA fd;
+  HANDLE h = FindFirstFileA(pattern.c_str(), &fd);
+  if (h == INVALID_HANDLE_VALUE) return names;
+  do {
+    if (fd.cFileName[0] == '.') continue;
+    if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      names.push_back(fd.cFileName);
+  } while (FindNextFileA(h, &fd));
+  FindClose(h);
+#else
+  DIR* dir = opendir(root.c_str());
+  if (!dir) return names;
+  while (dirent* ent = readdir(dir)) {
+    if (ent->d_name[0] == '.') continue;
+    std::string sub = root + ent->d_name;
+    if (isDir(sub)) names.push_back(ent->d_name);
+  }
+  closedir(dir);
+#endif
+  return names;
 }
 
 // Minimal JSON string field: "key": "value"
@@ -39,12 +87,11 @@ std::string jsonStringField(const std::string& text, const std::string& key) {
 }
 
 std::string ncaShareRootFromToonchess() {
-  std::string p = get_share_path(); // .../share/toonchess/
+  std::string p = ensureTrailingSlash(get_share_path()); // .../share/toonchess/
   auto pos = p.rfind("toonchess");
   if (pos != std::string::npos) p.replace(pos, 9, "nca");
   else p += "../nca/";
-  if (!p.empty() && p.back() != '/') p.push_back('/');
-  return p;
+  return ensureTrailingSlash(p);
 }
 
 const char* pieceFile(int piece) {
@@ -78,36 +125,27 @@ PieceSetManager::PieceSetManager() : active(0) {}
 
 void PieceSetManager::scan(const std::string& pieceSetsRoot) {
   setList.clear();
-  root = pieceSetsRoot;
-  if (!root.empty() && root.back() != '/') root.push_back('/');
+  root = ensureTrailingSlash(pieceSetsRoot);
 
-  DIR* dir = opendir(root.c_str());
-  if (!dir) {
+  std::vector<std::string> names = listSubdirNames(root);
+  if (names.empty() && !isDir(root)) {
     // Fall back: default nca/piece_sets next to toonchess share
     root = ncaShareRootFromToonchess() + "piece_sets/";
-    dir = opendir(root.c_str());
+    names = listSubdirNames(root);
   }
-  if (!dir) {
+  if (names.empty() && !isDir(root)) {
     std::cerr << "[PieceSet] No piece_sets directory at " << root << "\n";
     // Synthetic fallback using legacy starship/classic under toonchess
     PieceSetInfo legacy;
     legacy.id = "starship";
     legacy.name = "Starship Fleet";
     legacy.description = "Legacy path (assets/starship)";
-    legacy.path = get_share_path() + "assets/starship/";
+    legacy.path = ensureTrailingSlash(get_share_path() + "assets/starship");
     setList.push_back(legacy);
     active = 0;
     return;
   }
 
-  std::vector<std::string> names;
-  while (dirent* ent = readdir(dir)) {
-    if (ent->d_name[0] == '.') continue;
-    std::string sub = root + ent->d_name;
-    if (!isDir(sub)) continue;
-    names.push_back(ent->d_name);
-  }
-  closedir(dir);
   std::sort(names.begin(), names.end());
 
   for (const auto& name : names) {

@@ -19,7 +19,8 @@ std::string loadFile(const std::string& path){
 }
 
 GLuint loadPNGTexture(const std::string& path){
-  FILE* file = fopen(path.c_str(), "r");
+  // Binary mode required on Windows so PNG data is not corrupted by CRLF
+  FILE* file = fopen(path.c_str(), "rb");
   if (!file)
   {
     throw std::runtime_error("The file " + path + " does not exist");

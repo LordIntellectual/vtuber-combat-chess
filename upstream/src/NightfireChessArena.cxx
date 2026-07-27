@@ -71,9 +71,12 @@ bool gRunning = true;
 
 static std::string ncaShareRoot() {
   std::string p = get_share_path(); // .../share/toonchess/
+  for (size_t i = 0; i < p.size(); ++i)
+    if (p[i] == '\\') p[i] = '/';
   auto pos = p.rfind("toonchess");
   if (pos != std::string::npos) p.replace(pos, 9, "nca");
   else p += "../nca/";
+  if (!p.empty() && p.back() != '/') p.push_back('/');
   return p;
 }
 

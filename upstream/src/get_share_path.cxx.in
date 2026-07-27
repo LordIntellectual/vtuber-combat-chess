@@ -1,9 +1,111 @@
 #include <string>
+#include <cstdlib>
+#include <cstdio>
+#include <fstream>
 
 #include "get_share_path.hxx"
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <limits.h>
+#endif
+
+namespace {
+
+std::string normalizeSlashes(std::string p) {
+  for (size_t i = 0; i < p.size(); ++i)
+    if (p[i] == '\\') p[i] = '/';
+  return p;
+}
+
+bool dirLooksLikeToonchessShare(const std::string& p) {
+  // Expect shaders or assets under the toonchess share root
+  std::ifstream a(p + "shaders/celShadingVS.glsl");
+  if (a.good()) return true;
+  std::ifstream b(p + "assets/pawn.obj");
+  return b.good();
+}
+
+std::string exeDirectory() {
+#ifdef _WIN32
+  char buf[MAX_PATH];
+  DWORD n = GetModuleFileNameA(NULL, buf, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) return "";
+  std::string path = normalizeSlashes(std::string(buf, n));
+#else
+  char buf[PATH_MAX];
+  ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  if (n <= 0) return "";
+  buf[n] = '\0';
+  std::string path(buf);
+#endif
+  auto slash = path.find_last_of('/');
+  if (slash == std::string::npos) return "";
+  return path.substr(0, slash + 1);
+}
+
+std::string tryCandidates(const std::string& base) {
+  // base should end with /
+  const char* rels[] = {
+    "share/toonchess/",
+    "../share/toonchess/",
+    "../../share/toonchess/",
+  };
+  for (const char* r : rels) {
+    std::string c = normalizeSlashes(base + r);
+    if (dirLooksLikeToonchessShare(c)) return c;
+  }
+  return "";
+}
+
+} // namespace
+
 std::string get_share_path()
 {
-    static std::string share_path = @TOONCHESS_SHARE_PATH@;
-    return share_path;
+  static std::string share_path;
+  if (!share_path.empty()) return share_path;
+
+  // 1) Explicit override for packaging / portable installs
+  if (const char* env = std::getenv("VCC_SHARE")) {
+    if (env[0]) {
+      share_path = normalizeSlashes(env);
+      if (!share_path.empty() && share_path.back() != '/') share_path.push_back('/');
+      // Accept either .../share/ or .../share/toonchess/
+      if (share_path.size() < 10 ||
+          share_path.substr(share_path.size() - 10) != "toonchess/") {
+        // If user pointed at share/, append toonchess/
+        if (share_path.size() >= 6 &&
+            share_path.substr(share_path.size() - 6) == "share/")
+          share_path += "toonchess/";
+      }
+      return share_path;
+    }
+  }
+  if (const char* env = std::getenv("TOONCHESS_SHARE")) {
+    if (env[0]) {
+      share_path = normalizeSlashes(env);
+      if (!share_path.empty() && share_path.back() != '/') share_path.push_back('/');
+      return share_path;
+    }
+  }
+
+  // 2) Next to the running executable (Windows portable layout, local/bin, etc.)
+  std::string exedir = exeDirectory();
+  if (!exedir.empty()) {
+    std::string found = tryCandidates(exedir);
+    if (!found.empty()) {
+      share_path = found;
+      return share_path;
+    }
+  }
+
+  // 3) Compile-time install prefix from CMake
+  share_path = normalizeSlashes(@TOONCHESS_SHARE_PATH@);
+  if (!share_path.empty() && share_path.back() != '/') share_path.push_back('/');
+  return share_path;
 };

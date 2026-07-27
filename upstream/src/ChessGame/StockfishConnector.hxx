@@ -3,9 +3,15 @@
 
 #include <iostream>
 #include <string>
-#include <sys/types.h>
 
 #include "../constants.hxx"
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 class StockfishConnector {
 private:
@@ -14,7 +20,13 @@ private:
   */
   FILE* parentWritePipeF;
   FILE* parentReadPipeF;
-  pid_t childPid;
+
+#ifdef _WIN32
+  HANDLE childProcess;
+  HANDLE childThread;
+#else
+  int childPid;
+#endif
 
   /* All the moves since the beginning of the game */
   std::string moves;

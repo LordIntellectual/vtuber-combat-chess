@@ -1,13 +1,25 @@
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <signal.h>
 #include <iostream>
 #include <algorithm>
 #include <vector>
 #include <string.h>
 #include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#else
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <signal.h>
 #include <poll.h>
+#endif
 
 #include "../utils/utils.hxx"
 
@@ -30,7 +42,12 @@ std::string readLine(FILE* readPipe, bool print){
     }
 
     line.append(buffer);
-  }while(line.empty() || line.back() != '\n');
+  }while(line.empty() || (line.back() != '\n' && line.back() != '\r'));
+
+  // Normalize CRLF from Windows engines
+  while(!line.empty() && (line.back() == '\n' || line.back() == '\r'))
+    line.pop_back();
+  line.push_back('\n');
 
   if(print) std::cout << line << std::flush;
 
@@ -59,30 +76,59 @@ static int movetimeMsForSkill(int skill){
   return 2000;
 }
 
+/** Resolve stockfish executable name/path for CreateProcess / execlp. */
+static std::string stockfishCommand(){
+  // Optional override: full path to the engine binary
+  const char* env = std::getenv("VCC_STOCKFISH");
+  if(env && env[0]) return std::string(env);
+  env = std::getenv("STOCKFISH");
+  if(env && env[0]) return std::string(env);
+#ifdef _WIN32
+  return "stockfish.exe";
+#else
+  return "stockfish";
+#endif
+}
+
 StockfishConnector::StockfishConnector()
   : parentWritePipeF(NULL), parentReadPipeF(NULL),
-    childPid(-1), moves{""}, engineAlive(false) {}
+#ifdef _WIN32
+    childProcess(NULL), childThread(NULL),
+#else
+    childPid(-1),
+#endif
+    moves{""}, engineAlive(false) {}
 
 void StockfishConnector::closePipes(){
   if(parentReadPipeF){
-    int fd = fileno(parentReadPipeF);
     fclose(parentReadPipeF);
     parentReadPipeF = NULL;
-    if(fd >= 0) close(fd);
   }
   if(parentWritePipeF){
-    int fd = fileno(parentWritePipeF);
     fclose(parentWritePipeF);
     parentWritePipeF = NULL;
-    if(fd >= 0) close(fd);
   }
 }
 
 void StockfishConnector::killChild(){
+#ifdef _WIN32
+  if(childProcess){
+    // Soft stop already attempted via "quit"; force if still running
+    if(WaitForSingleObject(childProcess, 200) == WAIT_TIMEOUT){
+      TerminateProcess(childProcess, 1);
+      WaitForSingleObject(childProcess, 2000);
+    }
+    CloseHandle(childProcess);
+    childProcess = NULL;
+  }
+  if(childThread){
+    CloseHandle(childThread);
+    childThread = NULL;
+  }
+#else
   if(childPid > 0){
     kill(childPid, SIGTERM);
     int status = 0;
-    // Reap without hanging forever
     for(int i = 0; i < 20; i++){
       pid_t r = waitpid(childPid, &status, WNOHANG);
       if(r == childPid || r < 0) break;
@@ -94,16 +140,15 @@ void StockfishConnector::killChild(){
     }
     childPid = -1;
   } else {
-    // Reap any zombies
     int status = 0;
     while(waitpid(-1, &status, WNOHANG) > 0) {}
   }
+#endif
   engineAlive = false;
 }
 
 void StockfishConnector::restartCommunication(){
   std::cerr << "[Stockfish] Restarting engine…\n";
-  // Try graceful quit if pipes still open
   if(parentWritePipeF){
     try{
       writeLine(parentWritePipeF, "quit\n", false);
@@ -114,12 +159,104 @@ void StockfishConnector::restartCommunication(){
   startCommunication();
 }
 
+#ifdef _WIN32
+static void startCommunicationWindows(StockfishConnector* self,
+                                      FILE*& parentReadPipeF,
+                                      FILE*& parentWritePipeF,
+                                      HANDLE& childProcess,
+                                      HANDLE& childThread){
+  SECURITY_ATTRIBUTES sa;
+  ZeroMemory(&sa, sizeof(sa));
+  sa.nLength = sizeof(sa);
+  sa.bInheritHandle = TRUE;
+  sa.lpSecurityDescriptor = NULL;
+
+  HANDLE childStdInRd = NULL, childStdInWr = NULL;
+  HANDLE childStdOutRd = NULL, childStdOutWr = NULL;
+
+  if(!CreatePipe(&childStdInRd, &childStdInWr, &sa, 0))
+    throw ConnectionException("Failed to create Stockfish stdin pipe");
+  if(!SetHandleInformation(childStdInWr, HANDLE_FLAG_INHERIT, 0))
+    throw ConnectionException("Failed to configure Stockfish stdin pipe");
+
+  if(!CreatePipe(&childStdOutRd, &childStdOutWr, &sa, 0))
+    throw ConnectionException("Failed to create Stockfish stdout pipe");
+  if(!SetHandleInformation(childStdOutRd, HANDLE_FLAG_INHERIT, 0))
+    throw ConnectionException("Failed to configure Stockfish stdout pipe");
+
+  STARTUPINFOA si;
+  PROCESS_INFORMATION pi;
+  ZeroMemory(&si, sizeof(si));
+  ZeroMemory(&pi, sizeof(pi));
+  si.cb = sizeof(si);
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdInput = childStdInRd;
+  si.hStdOutput = childStdOutWr;
+  si.hStdError = childStdOutWr; // merge stderr so banner is not lost
+
+  std::string cmd = stockfishCommand();
+  // CreateProcess may modify the command line buffer
+  std::vector<char> cmdBuf(cmd.begin(), cmd.end());
+  cmdBuf.push_back('\0');
+
+  BOOL ok = CreateProcessA(
+    NULL,
+    cmdBuf.data(),
+    NULL,
+    NULL,
+    TRUE, // inherit handles
+    CREATE_NO_WINDOW,
+    NULL,
+    NULL,
+    &si,
+    &pi);
+
+  // Parent no longer needs the child-end handles
+  CloseHandle(childStdInRd);
+  CloseHandle(childStdOutWr);
+
+  if(!ok){
+    CloseHandle(childStdInWr);
+    CloseHandle(childStdOutRd);
+    DWORD err = GetLastError();
+    throw ConnectionException(
+      std::string("Failed to start Stockfish (") + cmd +
+      "). Place stockfish.exe next to the game or on PATH, or set VCC_STOCKFISH. "
+      "Win32 error " + std::to_string(err));
+  }
+
+  childProcess = pi.hProcess;
+  childThread = pi.hThread;
+
+  int rfd = _open_osfhandle(reinterpret_cast<intptr_t>(childStdOutRd), _O_RDONLY | _O_BINARY);
+  int wfd = _open_osfhandle(reinterpret_cast<intptr_t>(childStdInWr), _O_WRONLY | _O_BINARY);
+  if(rfd < 0 || wfd < 0){
+    throw ConnectionException("Failed to map Stockfish pipes to FILE*");
+  }
+  parentReadPipeF = _fdopen(rfd, "rb");
+  parentWritePipeF = _fdopen(wfd, "wb");
+  if(!parentReadPipeF || !parentWritePipeF){
+    throw ConnectionException("Failed to fdopen Stockfish pipes");
+  }
+  setvbuf(parentWritePipeF, NULL, _IONBF, 0);
+
+  (void)self;
+}
+#endif
+
 void StockfishConnector::startCommunication(){
-  // Clean any previous session
   closePipes();
+#ifdef _WIN32
+  if(childProcess) killChild();
+#else
   if(childPid > 0) killChild();
+#endif
   engineAlive = false;
 
+#ifdef _WIN32
+  startCommunicationWindows(this, parentReadPipeF, parentWritePipeF,
+                            childProcess, childThread);
+#else
   const char* readMode = "r";
   const char* writeMode = "w";
 
@@ -152,10 +289,9 @@ void StockfishConnector::startCommunication(){
     close(parentWritePipe);
     close(childReadPipe);
 
-    execlp("stockfish", "stockfish", (char *)NULL);
+    std::string cmd = stockfishCommand();
+    execlp(cmd.c_str(), cmd.c_str(), (char *)NULL);
 
-    writeLine(fdopen(childWritePipe, writeMode), "stop\n", true);
-    close(childWritePipe);
     _exit(127);
   }
 
@@ -166,13 +302,17 @@ void StockfishConnector::startCommunication(){
   parentReadPipeF = fdopen(parentReadPipe, readMode);
   parentWritePipeF = fdopen(parentWritePipe, writeMode);
   setvbuf(parentWritePipeF, NULL, _IOLBF, 0);
+#endif
 
   std::string line;
   std::vector<std::string> splittedLine;
 
   line = readLine(parentReadPipeF, true);
   splittedLine = split(line, ' ');
-  if(splittedLine.empty() || splittedLine.at(0).compare("Stockfish") != 0)
+  // Banner is usually "Stockfish <version> by ..."
+  if(splittedLine.empty() ||
+     (splittedLine.at(0).find("Stockfish") == std::string::npos &&
+      splittedLine.at(0).find("stockfish") == std::string::npos))
     throw ConnectionException(
     "Communication with stockfish did'nt start properly, closing");
 
@@ -187,7 +327,6 @@ void StockfishConnector::startCommunication(){
   difficultyOption.append("\n");
   writeLine(parentWritePipeF, difficultyOption, true);
 
-  // Cap threads/hash — keeps engine lighter under heavy 3D load
   writeLine(parentWritePipeF, "setoption name Threads value 1\n", false);
   writeLine(parentWritePipeF, "setoption name Hash value 64\n", false);
 
@@ -201,11 +340,14 @@ void StockfishConnector::startCommunication(){
 
   engineAlive = true;
   moves = "";
+#ifdef _WIN32
+  std::cout << "[Stockfish] Engine ready (Windows process)\n";
+#else
   std::cout << "[Stockfish] Engine ready (pid=" << childPid << ")\n";
+#endif
 }
 
 std::string StockfishConnector::getNextAIMoveFromFen(const std::string& fen){
-  // Auto-recover if a previous crash left us without a live engine
   if(!isAlive()){
     restartCommunication();
   }
@@ -216,7 +358,6 @@ std::string StockfishConnector::getNextAIMoveFromFen(const std::string& fen){
 
     std::cout << std::endl << "[Stockfish] position fen " << fen << std::endl;
 
-    // Stop any leftover search, then set position and go
     writeLine(parentWritePipeF, "stop\n", false);
 
     const int ms = movetimeMsForSkill(difficultyLevel);
@@ -225,7 +366,6 @@ std::string StockfishConnector::getNextAIMoveFromFen(const std::string& fen){
     line.append("\nisready\n");
     writeLine(parentWritePipeF, line, true);
 
-    // Drain until readyok (also discards residual info lines)
     while(true){
       line = readLine(parentReadPipeF, false);
       if(line.compare(0, 7, "readyok") == 0) break;
@@ -247,6 +387,7 @@ std::string StockfishConnector::getNextAIMoveFromFen(const std::string& fen){
     }
     std::string aiMove = splittedLine.at(1);
     aiMove.erase(std::remove(aiMove.begin(), aiMove.end(), '\n'), aiMove.end());
+    aiMove.erase(std::remove(aiMove.begin(), aiMove.end(), '\r'), aiMove.end());
     if(aiMove.empty() || aiMove == "(none)"){
       throw ConnectionException("Stockfish returned no legal move (checkmate/stalemate?)");
     }
@@ -310,6 +451,7 @@ std::string StockfishConnector::getNextAIMove(std::string userMove){
   }
   std::string aiMove = splittedLine.at(1);
   aiMove.erase(std::remove(aiMove.begin(), aiMove.end(), '\n'), aiMove.end());
+  aiMove.erase(std::remove(aiMove.begin(), aiMove.end(), '\r'), aiMove.end());
   if(aiMove.empty() || aiMove == "(none)"){
     if(moves.size() >= userMove.size() + 1){
       moves.resize(moves.size() - (userMove.size() + 1));
