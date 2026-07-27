@@ -75,21 +75,32 @@ if(EXISTS "${NCA_SHARE_DIR}")
   install(DIRECTORY "${NCA_SHARE_DIR}" DESTINATION "share")
 endif()
 
-set(EXECUTABLE_NAME "VTuberCombatChess")
-# Vendored GLAD (OpenGL 3.3 compatibility) — required on Windows; used on all platforms
+# gl.c must stay pure C. On MSVC, compiling it as C++ (or force-including
+# C++ headers via /FI) triggers STL1003. Isolate GLAD in its own C library.
+enable_language(C)
 set(GLAD_SRC ${CMAKE_SOURCE_DIR}/third_party/glad/src/gl.c)
+set_source_files_properties(${GLAD_SRC} PROPERTIES LANGUAGE C)
+add_library(vcc_glad STATIC ${GLAD_SRC})
+target_include_directories(vcc_glad PUBLIC
+  ${CMAKE_SOURCE_DIR}/third_party/glad/include
+)
+# Never apply C++-only flags to this target
+if(MSVC)
+  # Explicitly compile as C (/TC) for this TU
+  target_compile_options(vcc_glad PRIVATE /TC /W3)
+endif()
+
+set(EXECUTABLE_NAME "VTuberCombatChess")
 add_executable(${EXECUTABLE_NAME}
   src/NightfireChessArena.cxx
   ${CXX_FILES}
-  ${GLAD_SRC}
 )
 target_include_directories(${EXECUTABLE_NAME} PRIVATE
   ${CMAKE_SOURCE_DIR}/src
   ${CMAKE_SOURCE_DIR}/third_party
   ${CMAKE_SOURCE_DIR}/third_party/glad/include
 )
-# gl.c is C; ensure C language enabled
-enable_language(C)
+target_link_libraries(${EXECUTABLE_NAME} vcc_glad)
 
 if(MSVC)
   target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
@@ -98,10 +109,11 @@ if(MSVC)
     WIN32_LEAN_AND_MEAN
     _USE_MATH_DEFINES
   )
-  # Force M_PI + iso646 alternative tokens (and/or/not) on every TU
+  # Force M_PI + iso646 (and/or/not) on C++ TUs only — never on gl.c
   target_compile_options(${EXECUTABLE_NAME} PRIVATE
-    /W3 /EHsc
-    "/FI${CMAKE_SOURCE_DIR}/src/platform/msvc_compat.hxx"
+    $<$<COMPILE_LANGUAGE:CXX>:/W3>
+    $<$<COMPILE_LANGUAGE:CXX>:/EHsc>
+    $<$<COMPILE_LANGUAGE:CXX>:/FI${CMAKE_SOURCE_DIR}/src/platform/msvc_compat.hxx>
   )
 endif()
 

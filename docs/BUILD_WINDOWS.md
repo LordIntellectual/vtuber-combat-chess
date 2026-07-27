@@ -100,8 +100,9 @@ local\bin\
 | Bullet `cmake --install` empty | Explicit copy of libs + headers |
 | `BULLET_ROOT` ignored | `CMP0074` / `CMP0144` NEW in CMakeLists + script flags |
 | OpenGL symbols missing on MSVC | Vendored **GLAD** + `vccInitGL()` after context |
-| `and` / `or` / `not` | `/FI msvc_compat.hxx` includes `<ciso646>` |
+| `and` / `or` / `not` | `/FI msvc_compat.hxx` includes `<ciso646>` (**C++ only**) |
 | `M_PI` undeclared | `_USE_MATH_DEFINES` + `M_PI` fallback in force-include |
+| GLAD `gl.c` → STL1003 on MSVC | GLAD built as pure-C static lib `vcc_glad` (`LANGUAGE C` / `/TC`); `/FI` never applied to C |
 
 ## If configure still fails
 
