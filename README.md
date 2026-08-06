@@ -78,20 +78,19 @@ Use the **`main`** branch and `./install_and_build.sh` / `./run.sh`.
 - Piece sets including classic, starship, space, and vTuber-style sets
 - Streamer HUD, settings (sound / video / gameplay)
 
-### Multiplayer (experimental)
+### Main Menu & multiplayer (experimental)
 
-Host-authoritative TCP (protocol **VCC1**). Default port **7777**. AI is forced off while connected.
+After the pre-alpha splash you get a **Main Menu**:
 
-```bash
-# Host
-./run.sh --host
-# or: ./run.sh --host 9000
+| Option | Effect |
+|--------|--------|
+| **Single Player** | Offline game (Stockfish AI / local hotseat with **A**) |
+| **Multiplayer** | Host a game or join via `HOST:PORT` |
+| **Settings** | Sound / Video / Gameplay (same menu as in-game **S**) |
 
-# Guest (another machine or second process)
-./run.sh --join HOST:7777
-```
+**Esc** while playing returns to the Main Menu (does not quit). Quit from the menu **Quit** button (or Esc on the root menu).
 
-Host plays **White**; guest plays **Black**. Open the listen port in the host firewall for internet play. Full design, risks, and roadmap: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
+Multiplayer is host-authoritative TCP (protocol **VCC1**), default port **7777**. Host = White, guest = Black; AI is forced off. Optional CLI still works: `--host [PORT]`, `--join HOST:PORT`. Full design: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
 
 ## Controls (summary)
 
