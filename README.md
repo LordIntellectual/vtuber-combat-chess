@@ -43,11 +43,19 @@ There is **no official support**. You may download, compile, and run it at your 
 ## Features (pre-alpha)
 
 - Play vs **Stockfish** (or human vs human with AI off)
+- **Network multiplayer (experimental):** host/join over TCP — see [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md)
 - Capture **destruction physics** (Bullet fragments), sparks / neon trails
 - Action camera on captures; checkmate / forfeit victory screens
 - Themes: Cyber Neon Lounge, Bioluminescent Jungle, Starship Over a Star
 - Piece sets including classic, starship, space, and vTuber-style sets
 - Streamer HUD, settings (sound / video / gameplay)
+
+### Main Menu & multiplayer (experimental)
+
+After the pre-alpha splash: **Single Player**, **Multiplayer** (online room list / host / join), **Settings**.  
+**Esc** in a match returns to the Main Menu. Online rooms use a lobby + relay (no peer IPs). Spec: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
+
+Optional CLI: `--host [PORT]`, `--join HOST:PORT`.
 
 ## Requirements (Linux)
 

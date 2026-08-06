@@ -570,6 +570,11 @@ bool ChessGame::evaluateEndAfterMove(bool whiteJustMoved){
 }
 
 void ChessGame::setAiEnabled(bool enabled){
+  // Network session owns AI off — ignore toggles that would re-enable
+  if(netRole != NET_NONE && enabled){
+    aiEnabled = false;
+    return;
+  }
   aiEnabled = enabled;
   // If we were waiting for AI and AI was just disabled, give black to human.
   if(!aiEnabled && (state == AI_TURN || state == WAITING)){
@@ -578,6 +583,151 @@ void ChessGame::setAiEnabled(bool enabled){
     oldSelectedPiecePosition = {-1, -1};
     resetAllowedNextPositions();
   }
+}
+
+void ChessGame::setNetworkRole(NetRole role, int localSideSign){
+  if(role == NET_NONE){
+    clearNetworkRole();
+    return;
+  }
+  if(netRole == NET_NONE)
+    aiEnabledBeforeNet = aiEnabled;
+  netRole = role;
+  netLocalSide = (localSideSign >= 0) ? 1 : -1;
+  aiEnabled = false;
+  if(state == AI_TURN || state == WAITING)
+    state = BLACK_TURN;
+  pendingMoveReq.clear();
+  localMoveBroadcast.clear();
+  selectedPiecePosition = {-1, -1};
+  oldSelectedPiecePosition = {-1, -1};
+  resetAllowedNextPositions();
+}
+
+void ChessGame::clearNetworkRole(){
+  if(netRole == NET_NONE) return;
+  netRole = NET_NONE;
+  netLocalSide = 1;
+  pendingMoveReq.clear();
+  localMoveBroadcast.clear();
+  setAiEnabled(aiEnabledBeforeNet);
+}
+
+bool ChessGame::canLocalPlayerMove() const {
+  if(state != USER_TURN && state != BLACK_TURN) return false;
+  if(netRole == NET_NONE) return true;
+  bool whiteTurn = (state == USER_TURN);
+  bool localWhite = (netLocalSide > 0);
+  return whiteTurn == localWhite;
+}
+
+char ChessGame::sideToMoveChar() const {
+  if(state == USER_TURN || state == USER_MOVING) return 'w';
+  if(state == BLACK_TURN || state == BLACK_MOVING ||
+     state == AI_TURN || state == AI_MOVING || state == WAITING)
+    return 'b';
+  return 'w';
+}
+
+std::string ChessGame::getFen() const {
+  return boardToFen(sideToMoveChar() == 'w');
+}
+
+std::string ChessGame::consumePendingMoveReq(){
+  std::string s = pendingMoveReq;
+  pendingMoveReq.clear();
+  return s;
+}
+
+std::string ChessGame::consumeLocalMoveBroadcast(){
+  std::string s = localMoveBroadcast;
+  localMoveBroadcast.clear();
+  return s;
+}
+
+bool ChessGame::beginAnimatedMove(Vector2i start, Vector2i end, int placedPiece,
+                                  bool fromWhiteTurn){
+  int piece = boardAt(start.x, start.y);
+  if(piece == EMPTY || piece == OUT_OF_BOUND) return false;
+
+  movingPiece = piece;
+  movingPieceStartPosition = start;
+  movingPieceEndPosition = end;
+  movingPiecePosition = {(float)start.x, (float)start.y};
+  movingPiecePlaced = (placedPiece != EMPTY) ? placedPiece
+                      : pieceAfterPromotion(piece, end);
+
+  {
+    int dest = boardAt(end.x, end.y);
+    movingIsCapture = (dest != EMPTY && dest * piece < 0);
+    if(!movingIsCapture && abs(piece) == PAWN && start.x != end.x){
+      int ep = boardAt(end.x, start.y);
+      movingIsCapture = (ep != EMPTY && ep * piece < 0);
+    }
+  }
+
+  applyMoveSideEffects(piece, start, end);
+  board[start.x][start.y] = EMPTY;
+
+  lastUserMove.clear();
+  lastUserMove.append(positionToUciFormat(start));
+  lastUserMove.append(positionToUciFormat(end));
+  if(char promo = uciPromotionChar(movingPiecePlaced)){
+    if(abs(piece) == PAWN && movingPiecePlaced != piece)
+      lastUserMove.push_back(promo);
+  }
+
+  oldSelectedPiecePosition = {-1, -1};
+  selectedPiecePosition = {-1, -1};
+  suggestedUserMoveStartPosition = {-1, -1};
+  suggestedUserMoveEndPosition = {-1, -1};
+  resetAllowedNextPositions();
+
+  state = fromWhiteTurn ? USER_MOVING : BLACK_MOVING;
+  clock->restart();
+  movePly += 1;
+  return true;
+}
+
+bool ChessGame::tryApplyUciMove(const std::string& uci, bool trusted){
+  if(state == GAME_OVER) return false;
+  if(state != USER_TURN && state != BLACK_TURN) return false;
+  if(uci.size() < 4) return false;
+
+  Vector2i start, end;
+  try {
+    start = uciFormatToPosition(uci.substr(0, 2));
+    end = uciFormatToPosition(uci.substr(2, 2));
+  } catch (...) {
+    return false;
+  }
+
+  int piece = boardAt(start.x, start.y);
+  if(piece == EMPTY || piece == OUT_OF_BOUND) return false;
+
+  bool whiteTurn = (state == USER_TURN);
+  if(whiteTurn && piece < 0) return false;
+  if(!whiteTurn && piece > 0) return false;
+
+  int placed = EMPTY;
+  if(uci.size() >= 5 && std::isalpha(static_cast<unsigned char>(uci[4]))){
+    placed = pieceFromUciPromotion(piece, uci[4]);
+  } else {
+    placed = pieceAfterPromotion(piece, end);
+  }
+
+  if(!trusted){
+    // Validate via allowed-move matrix for this piece
+    Vector2i savedSel = selectedPiecePosition;
+    selectedPiecePosition = start;
+    computeAllowedNextPositions();
+    bool ok = allowedNextPositions[end.x][end.y];
+    selectedPiecePosition = savedSel;
+    resetAllowedNextPositions();
+    if(!ok) return false;
+  }
+
+  return beginAnimatedMove(start, end, placed, whiteTurn);
 }
 
 void ChessGame::resetBoard(){
@@ -599,6 +749,9 @@ void ChessGame::resetBoard(){
   endReason = END_NONE;
   whiteWon = true;
   victoryFxPending = false;
+  movePly = 0;
+  pendingMoveReq.clear();
+  localMoveBroadcast.clear();
   movingPiece = EMPTY;
   movingPiecePlaced = EMPTY;
   movingPiecePosition = {-1, -1};
@@ -627,6 +780,10 @@ void ChessGame::resetBoard(){
 void ChessGame::setNewSelectedPiecePosition(
     Vector2i newSelectedPiecePosition){
   if(state == USER_TURN || state == BLACK_TURN){
+    // Network: only interact on our turn
+    if(netRole != NET_NONE && !canLocalPlayerMove())
+      return;
+
     // Register last user clicked position
     oldSelectedPiecePosition = selectedPiecePosition;
 
@@ -656,61 +813,37 @@ void ChessGame::perform(){
     if(selectedPiecePosition.x != -1 and selectedPiecePosition.y != -1 and
         allowedNextPositions[selectedPiecePosition.x]
                             [selectedPiecePosition.y] == true){
-      // Set the currently moving piece
-      movingPiece = boardAt(
-        oldSelectedPiecePosition.x, oldSelectedPiecePosition.y);
-      movingPieceStartPosition = oldSelectedPiecePosition;
-      movingPieceEndPosition = selectedPiecePosition;
-      movingPiecePosition = {
-        (float)movingPieceStartPosition.x, (float)movingPieceStartPosition.y
-      };
-      // Auto-queen on last rank (UCI requires promotion suffix, e.g. e7e8q)
-      movingPiecePlaced = pieceAfterPromotion(
-        movingPiece, movingPieceEndPosition);
-
-      // Capture? Check before side-effects clear en passant victims
-      {
-        int dest = boardAt(movingPieceEndPosition.x, movingPieceEndPosition.y);
-        movingIsCapture = (dest != EMPTY && dest * movingPiece < 0);
-        if (!movingIsCapture && abs(movingPiece) == PAWN &&
-            movingPieceStartPosition.x != movingPieceEndPosition.x) {
-          int ep = boardAt(movingPieceEndPosition.x, movingPieceStartPosition.y);
-          movingIsCapture = (ep != EMPTY && ep * movingPiece < 0);
+      // Client must not apply locally — queue MOVE_REQ for host authority
+      if(netRole == NET_CLIENT){
+        try {
+          pendingMoveReq.clear();
+          pendingMoveReq.append(positionToUciFormat(oldSelectedPiecePosition));
+          pendingMoveReq.append(positionToUciFormat(selectedPiecePosition));
+          int piece = boardAt(oldSelectedPiecePosition.x,
+                              oldSelectedPiecePosition.y);
+          int placed = pieceAfterPromotion(piece, selectedPiecePosition);
+          if(char promo = uciPromotionChar(placed)){
+            if(abs(piece) == PAWN && placed != piece)
+              pendingMoveReq.push_back(promo);
+          }
+        } catch (...) {
+          pendingMoveReq.clear();
         }
+        oldSelectedPiecePosition = {-1, -1};
+        selectedPiecePosition = {-1, -1};
+        resetAllowedNextPositions();
+        return;
       }
 
-      // Castling rook / en passant capture (if applicable)
-      applyMoveSideEffects(
-        movingPiece, movingPieceStartPosition, movingPieceEndPosition);
+      bool fromWhite = (state == USER_TURN);
+      Vector2i start = oldSelectedPiecePosition;
+      Vector2i end = selectedPiecePosition;
+      if(!beginAnimatedMove(start, end, EMPTY, fromWhite))
+        return;
 
-      // Remove the piece from its old position
-      board[oldSelectedPiecePosition.x][oldSelectedPiecePosition.y] = EMPTY;
-
-      // Store the last move as an UCI string (with promotion char if needed)
-      lastUserMove.clear();
-      lastUserMove.append(
-        positionToUciFormat(oldSelectedPiecePosition));
-      lastUserMove.append(
-        positionToUciFormat(selectedPiecePosition));
-      if(char promo = uciPromotionChar(movingPiecePlaced)){
-        if(abs(movingPiece) == PAWN && movingPiecePlaced != movingPiece)
-          lastUserMove.push_back(promo);
-      }
-
-      // Unselect piece
-      oldSelectedPiecePosition = {-1, -1};
-      selectedPiecePosition = {-1, -1};
-
-      // Reset suggested user move
-      suggestedUserMoveStartPosition = {-1, -1};
-      suggestedUserMoveEndPosition = {-1, -1};
-
-      // Reset allowedNextPositions matrix
-      resetAllowedNextPositions();
-
-      // Transition to the next state
-      state = (state == USER_TURN) ? USER_MOVING : BLACK_MOVING;
-      clock->restart();
+      // Host: broadcast this local move to guest
+      if(netRole == NET_HOST)
+        localMoveBroadcast = lastUserMove;
     }
   }
   else if(state == USER_MOVING or state == AI_MOVING or state == BLACK_MOVING) {

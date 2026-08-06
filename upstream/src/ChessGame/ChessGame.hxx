@@ -212,8 +212,63 @@ public:
 
   bool isGameOver() const { return state == GAME_OVER; }
 
+  /* --- Networked multiplayer (see docs/MULTIPLAYER_DESIGN.md) --- */
+  enum NetRole { NET_NONE = 0, NET_HOST = 1, NET_CLIENT = 2 };
+
+  /** Enable network mode. localSideSign: +1 white, -1 black. Forces AI off. */
+  void setNetworkRole(NetRole role, int localSideSign);
+  void clearNetworkRole();
+  NetRole networkRole() const { return netRole; }
+  bool isNetworked() const { return netRole != NET_NONE; }
+  bool isNetAuthority() const { return netRole != NET_CLIENT; }
+  int localSideSign() const { return netLocalSide; }
+
+  /** True if local input may commit a move this turn. */
+  bool canLocalPlayerMove() const;
+
+  /**
+   * Apply a UCI move and start animation (USER_MOVING / BLACK_MOVING).
+   * Host validates legality; client may pass trusted=true for host MOVE.
+   * \return true if accepted
+   */
+  bool tryApplyUciMove(const std::string& uci, bool trusted = false);
+
+  /** FEN for current board; side-to-move derived from state when possible. */
+  std::string getFen() const;
+
+  /** Side to move: 'w' or 'b' (best-effort from state). */
+  char sideToMoveChar() const;
+
+  /** Half-move / ply counter for network (incremented when a move starts). */
+  int movePly = 0;
+
+  /**
+   * Client-only: UCI waiting to be sent as MOVE_REQ (set by perform when
+   * local player commits a destination). Cleared by consumePendingMoveReq().
+   */
+  bool hasPendingMoveReq() const { return !pendingMoveReq.empty(); }
+  std::string consumePendingMoveReq();
+
+  /**
+   * Host: UCI of a move that just started from local input this perform().
+   * Cleared by consumeLocalMoveBroadcast().
+   */
+  bool hasLocalMoveBroadcast() const { return !localMoveBroadcast.empty(); }
+  std::string consumeLocalMoveBroadcast();
+
   /* Destructor */
   ~ChessGame();
+
+private:
+  NetRole netRole = NET_NONE;
+  int netLocalSide = 1; // +1 white, -1 black
+  bool aiEnabledBeforeNet = true;
+  std::string pendingMoveReq;
+  std::string localMoveBroadcast;
+
+  /** Shared path: begin animated move from start→end (board still has piece). */
+  bool beginAnimatedMove(Vector2i start, Vector2i end, int placedPiece,
+                         bool fromWhiteTurn);
 };
 
 #endif
