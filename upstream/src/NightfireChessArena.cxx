@@ -5,7 +5,10 @@
 #include <sstream>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstdint>
 #include <algorithm>
+#include <string>
 
 #include "mesh/Mesh.hxx"
 #include "mesh/meshes.hxx"
@@ -38,6 +41,8 @@
 #include "Environment/Starfield.hxx"
 #include "PieceSet/PieceSet.hxx"
 #include "PieceSet/PieceTransform.hxx"
+#include "Network/NetSession.hxx"
+#include "Network/NetProtocol.hxx"
 #include "get_share_path.hxx"
 
 // Globals
@@ -66,6 +71,7 @@ std::map<int, Mesh*>* gPieces = nullptr;
 std::map<int, std::vector<Mesh*>>* gFragmentMeshes = nullptr;
 PhysicsWorld* gPhysics = nullptr;
 bool gRunning = true;
+NetSession* gNet = nullptr;
 
 static std::string ncaShareRoot() {
   std::string p = get_share_path(); // .../share/toonchess/
@@ -151,6 +157,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
   if (key == GLFW_KEY_3) { gThemes->setTheme(THEME_STARSHIP); applyThemeAudio(); }
   if (key == GLFW_KEY_T) { gThemes->cycle(); applyThemeAudio(); }
   if (key == GLFW_KEY_A) {
+    if (gGame && gGame->isNetworked()) {
+      if (gHud) gHud->setEvent("AI locked off during multiplayer");
+      return;
+    }
     gGame->setAiEnabled(!gGame->isAiEnabled());
     gAudio->playSfx("sfx_select");
     gHud->setEvent(gGame->isAiEnabled() ? "AI enabled" : "AI disabled — human plays black");
@@ -168,7 +178,17 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     gHud->setEvent(std::string("FX → ") + ThemeManager::fxName(gThemes->fx()));
   }
   if (key == GLFW_KEY_R) {
+    // Guest cannot reset the shared board (host authority)
+    if (gGame && gGame->networkRole() == ChessGame::NET_CLIENT) {
+      if (gHud) gHud->setEvent("Only host can reset the board");
+      return;
+    }
     gGame->resetBoard();
+    if (gNet && gNet->inGame() && gGame->networkRole() == ChessGame::NET_HOST) {
+      gNet->send(NetProtocol::makeStart(
+        gGame->getFen(), "w", gGame->movePly));
+      std::cout << "[VCC-NET] START (reset) broadcast\n";
+    }
     gAudio->playSfx("sfx_theme");
     gHud->setEvent("Board reset");
     std::cout << "[VCC] Board reset\n";
@@ -328,7 +348,155 @@ void celShadingRender(
   const float* neonLightIntensity = nullptr,
   int neonLightCount = 0);
 
-int main() {
+static void printNetUsage() {
+  std::cout << "Multiplayer (experimental):\n"
+            << "  --host [PORT]          Host a game (default port 7777)\n"
+            << "  --join HOST:PORT       Join a host\n"
+            << "  --port PORT            Default port for --host\n"
+            << "See docs/MULTIPLAYER_DESIGN.md\n";
+}
+
+/** Parse multiplayer CLI. Returns false on hard error (bad args). */
+static bool parseNetArgs(int argc, char** argv,
+                         bool& wantHost, bool& wantJoin,
+                         uint16_t& port, std::string& joinTarget) {
+  wantHost = false;
+  wantJoin = false;
+  port = 7777;
+  joinTarget.clear();
+  if (const char* ep = std::getenv("VCC_PORT")) {
+    int p = std::atoi(ep);
+    if (p > 0 && p <= 65535) port = (uint16_t)p;
+  }
+  if (const char* ej = std::getenv("VCC_JOIN")) {
+    if (ej[0]) {
+      wantJoin = true;
+      joinTarget = ej;
+    }
+  }
+  for (int i = 1; i < argc; ++i) {
+    std::string a = argv[i];
+    if (a == "--help" || a == "-h") {
+      printNetUsage();
+      return false;
+    }
+    if (a == "--host") {
+      wantHost = true;
+      if (i + 1 < argc && argv[i + 1][0] != '-') {
+        int p = std::atoi(argv[++i]);
+        if (p > 0 && p <= 65535) port = (uint16_t)p;
+      }
+    } else if (a == "--join") {
+      wantJoin = true;
+      if (i + 1 >= argc) {
+        std::cerr << "[VCC-NET] --join requires HOST:PORT\n";
+        return false;
+      }
+      joinTarget = argv[++i];
+    } else if (a == "--port") {
+      if (i + 1 >= argc) {
+        std::cerr << "[VCC-NET] --port requires a number\n";
+        return false;
+      }
+      int p = std::atoi(argv[++i]);
+      if (p > 0 && p <= 65535) port = (uint16_t)p;
+    }
+  }
+  if (wantHost && wantJoin) {
+    std::cerr << "[VCC-NET] --host and --join are mutually exclusive\n";
+    return false;
+  }
+  return true;
+}
+
+static void sendHostStart(NetSession& net, ChessGame* game) {
+  if (!game) return;
+  net.send(NetProtocol::makeStart(game->getFen(), "w", game->movePly));
+  std::cout << "[VCC-NET] START fen ply=" << game->movePly << std::endl;
+}
+
+static void handleNetMessages(NetSession& net, ChessGame* game, Hud* hud,
+                              AudioEngine* audio) {
+  NetProtocol::Message msg;
+  while (net.pollMessage(msg)) {
+    if (msg.type == "HELLO") {
+      // Host already advanced; app sends START
+      continue;
+    }
+    if (msg.type == "WELCOME") {
+      std::string you = msg.get("you", "black");
+      int side = (you == "white") ? 1 : -1;
+      if (game) {
+        game->setNetworkRole(ChessGame::NET_CLIENT, side);
+        game->resetBoard();
+      }
+      if (hud) hud->setEvent(std::string("Joined as ") + you);
+      continue;
+    }
+    if (msg.type == "START") {
+      if (game) {
+        game->resetBoard();
+        // Opening only for MVP; FEN load deferred to Phase 2
+      }
+      if (hud) hud->setEvent("Game start (network)");
+      std::cout << "[VCC-NET] START received\n";
+      continue;
+    }
+    if (msg.type == "MOVE_REQ") {
+      // Host only
+      if (!game || game->networkRole() != ChessGame::NET_HOST) continue;
+      std::string uci = msg.get("uci");
+      if (!game->tryApplyUciMove(uci, false)) {
+        net.send(NetProtocol::makeReject(uci, "illegal"));
+        if (hud) hud->setEvent("Rejected guest move " + uci);
+        if (audio) audio->playSfx("sfx_illegal");
+        std::cout << "[VCC-NET] REJECT " << uci << std::endl;
+      } else {
+        net.send(NetProtocol::makeMove(uci, game->movePly, "b"));
+        std::cout << "[VCC-NET] MOVE " << uci << " ply=" << game->movePly
+                  << std::endl;
+      }
+      continue;
+    }
+    if (msg.type == "MOVE") {
+      // Client applies host-authoritative move (or host ignores own echo)
+      if (!game) continue;
+      if (game->networkRole() == ChessGame::NET_HOST) continue;
+      std::string uci = msg.get("uci");
+      if (!game->tryApplyUciMove(uci, true)) {
+        std::cerr << "[VCC-NET] failed to apply MOVE " << uci << std::endl;
+        if (hud) hud->setEvent("Desync on MOVE " + uci);
+      } else {
+        std::cout << "[VCC-NET] MOVE applied " << uci << std::endl;
+      }
+      continue;
+    }
+    if (msg.type == "REJECT") {
+      if (hud) hud->setEvent("Move rejected: " + msg.get("reason", "?"));
+      if (audio) audio->playSfx("sfx_illegal");
+      continue;
+    }
+    if (msg.type == "STATE") {
+      // Phase 2: full FEN load. MVP: log only.
+      std::cout << "[VCC-NET] STATE ply=" << msg.get("ply")
+                << " turn=" << msg.get("turn") << std::endl;
+      continue;
+    }
+  }
+}
+
+int main(int argc, char** argv) {
+  bool wantHost = false, wantJoin = false;
+  uint16_t netPort = 7777;
+  std::string joinTarget;
+  if (!parseNetArgs(argc, argv, wantHost, wantJoin, netPort, joinTarget)) {
+    // --help or bad args
+    if (argc > 1 && (std::string(argv[1]) == "--help" ||
+                     std::string(argv[1]) == "-h"))
+      return 0;
+    return 1;
+  }
+
   if (!glfwInit()) return 1;
   glfwWindowHint(GLFW_SAMPLES, ANTIALIASING_HIGH);
   // Compatibility profile required for fixed-function HUD (stb_easy_font)
@@ -405,6 +573,35 @@ int main() {
     std::cerr << "[VCC] Continuing without Stockfish (AI will fail if left ON)\n";
   }
 
+  NetSession netSession;
+  gNet = &netSession;
+  if (wantHost) {
+    std::string err;
+    if (!netSession.startHost(netPort, &err)) {
+      std::cerr << "[VCC-NET] host failed: " << err << std::endl;
+      hud.setEvent("Host failed: " + err);
+    } else {
+      game->setNetworkRole(ChessGame::NET_HOST, /*white*/ 1);
+      game->resetBoard();
+      hud.setEvent("Hosting on port " + std::to_string(netPort));
+    }
+  } else if (wantJoin) {
+    std::string host;
+    uint16_t jp = netPort;
+    if (!TcpSocket::parseHostPort(joinTarget, host, jp)) {
+      std::cerr << "[VCC-NET] invalid --join target (use HOST:PORT)\n";
+      hud.setEvent("Invalid join address");
+    } else {
+      std::string err;
+      if (!netSession.startClient(host, jp, "Guest", &err)) {
+        std::cerr << "[VCC-NET] join failed: " << err << std::endl;
+        hud.setEvent("Join failed: " + err);
+      } else {
+        hud.setEvent("Connecting to " + joinTarget);
+      }
+    }
+  }
+
   SmokeGenerator* smokeGenerator = new SmokeGenerator();
   smokeGenerator->initBuffers();
 
@@ -464,9 +661,15 @@ int main() {
   glfwSetKeyCallback(window, key_callback);
 
   std::cout << "[VCC] Controls: S settings | RMB orbit | wheel zoom | P pieces | H hide UI | 1/2/3 themes | A AI | M music\n";
-  hud.setEvent(std::string("Set: ") + pieceSets.current().name + " — S for volume settings");
+  if (wantHost || wantJoin)
+    std::cout << "[VCC-NET] Multiplayer active — see docs/MULTIPLAYER_DESIGN.md\n";
+  else
+    std::cout << "[VCC-NET] Offline. Use --host or --join HOST:PORT for multiplayer.\n";
+  if (!(wantHost || wantJoin))
+    hud.setEvent(std::string("Set: ") + pieceSets.current().name + " — S for volume settings");
 
   Clock frameClock;
+  bool netWasInGame = false;
   while (gRunning && !glfwWindowShouldClose(window)) {
     float elapsedTime = (float)mainClock.getElapsedTime();
     float dt = (float)frameClock.getElapsedTime();
@@ -475,6 +678,53 @@ int main() {
     captureShake.update(dt);
     audio.update();
     glfwPollEvents();
+
+    // Network pump (non-blocking)
+    if (netSession.active()) {
+      netSession.pump();
+      if (netSession.consumePeerJustJoined()) {
+        // Host: peer finished HELLO — reset + START
+        game->resetBoard();
+        sendHostStart(netSession, game);
+        hud.setEvent("Guest joined — you are White");
+        audio.playSfx("sfx_theme");
+      }
+      handleNetMessages(netSession, game, &hud, &audio);
+
+      // Client MOVE_REQ
+      if (game->hasPendingMoveReq()) {
+        std::string uci = game->consumePendingMoveReq();
+        int ply = game->movePly + 1;
+        netSession.send(NetProtocol::makeMoveReq(uci, ply));
+        std::cout << "[VCC-NET] MOVE_REQ " << uci << std::endl;
+        hud.setEvent("Sent move " + uci);
+      }
+      // Host local MOVE broadcast
+      if (game->hasLocalMoveBroadcast()) {
+        std::string uci = game->consumeLocalMoveBroadcast();
+        netSession.send(NetProtocol::makeMove(
+          uci, game->movePly, game->localSideSign() > 0 ? "w" : "b"));
+        std::cout << "[VCC-NET] MOVE " << uci << " ply=" << game->movePly
+                  << std::endl;
+      }
+
+      if (netSession.inGame()) {
+        netWasInGame = true;
+        // Status overlay via event occasionally
+        static double lastStatus = 0;
+        double t = mainClock.getElapsedTime();
+        if (t - lastStatus > 2.0) {
+          lastStatus = t;
+          // lightweight: status line includes net
+        }
+      } else if (netWasInGame && !netSession.active()) {
+        hud.setEvent(netSession.statusLine());
+        game->clearNetworkRole();
+        netWasInGame = false;
+      } else if (!netSession.active() && netSession.phase() == NetSession::PHASE_CLOSED) {
+        hud.setEvent(netSession.statusLine());
+      }
+    }
 
     // Settings → Quit confirmed
     if (settings.consumeQuitRequest()) {
@@ -532,7 +782,14 @@ int main() {
       hud.setEvent("Internal error (move)");
     }
     int st = game->getState();
-    hud.setStatus(stateName(st));
+    {
+      std::string status = stateName(st);
+      if (netSession.active() || netSession.phase() == NetSession::PHASE_CLOSED) {
+        status += " | ";
+        status += netSession.statusLine();
+      }
+      hud.setStatus(status);
+    }
     bool startedMoving =
       (prevState == USER_TURN && st == USER_MOVING) ||
       (prevState == BLACK_TURN && st == BLACK_MOVING) ||

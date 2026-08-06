@@ -71,11 +71,27 @@ Use the **`main`** branch and `./install_and_build.sh` / `./run.sh`.
 ## Features (pre-alpha)
 
 - Play vs **Stockfish** (or human vs human with AI off)
+- **Network multiplayer (experimental):** host/join over TCP — see [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md)
 - Capture **destruction physics** (Bullet fragments), sparks / neon trails
 - Action camera on captures; checkmate / forfeit victory screens
 - Themes: Cyber Neon Lounge, Bioluminescent Jungle, Starship Over a Star
 - Piece sets including classic, starship, space, and vTuber-style sets
 - Streamer HUD, settings (sound / video / gameplay)
+
+### Multiplayer (experimental)
+
+Host-authoritative TCP (protocol **VCC1**). Default port **7777**. AI is forced off while connected.
+
+```bash
+# Host
+./run.sh --host
+# or: ./run.sh --host 9000
+
+# Guest (another machine or second process)
+./run.sh --join HOST:7777
+```
+
+Host plays **White**; guest plays **Black**. Open the listen port in the host firewall for internet play. Full design, risks, and roadmap: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
 
 ## Controls (summary)
 

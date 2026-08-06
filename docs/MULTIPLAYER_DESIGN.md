@@ -464,22 +464,24 @@ This is **not** a secure competitive environment.
 ### Phase 0 — Design anchor (this document)
 
 - [x] Write `docs/MULTIPLAYER_DESIGN.md`  
-- [ ] Commit early to repo  
-- [ ] Link from `docs/DESIGN.md`; remove multiplayer from non-goals  
+- [x] Commit early to repo  
+- [x] Link from `docs/DESIGN.md`; remove multiplayer from non-goals  
 
 ### Phase 1 — MVP transport + host/join (current build target)
 
-1. `Network/TcpSocket` — cross-platform non-blocking TCP.  
-2. `Network/NetProtocol` — VCC1 encode/decode.  
-3. `Network/NetSession` — host listen, client connect, queues, PING.  
-4. `ChessGame::tryApplyUciMove` (+ any shared begin-move helper).  
-5. CLI `--host [port]` / `--join host:port` in `NightfireChessArena.cxx`.  
-6. Frame pump + input gating + AI off.  
-7. CMake: sources + `ws2_32` on Windows.  
-8. Manual localhost two-process test.  
-9. Log tags: `[VCC-NET]` for stream/debug stdout.
+1. [x] `Network/TcpSocket` — cross-platform non-blocking TCP.  
+2. [x] `Network/NetProtocol` — VCC1 encode/decode.  
+3. [x] `Network/NetSession` — host listen, client connect, queues, PING.  
+4. [x] `ChessGame::tryApplyUciMove` (+ shared `beginAnimatedMove` helper).  
+5. [x] CLI `--host [port]` / `--join host:port` in `NightfireChessArena.cxx`.  
+6. [x] Frame pump + input gating + AI off.  
+7. [x] CMake: sources + `ws2_32` on Windows.  
+8. [x] Headless localhost smoke test (`tools/net_smoke_test.cxx`) — handshake + MOVE.  
+9. [x] Log tags: `[VCC-NET]` for stream/debug stdout.  
+10. [ ] Full two-GUI process visual playtest (needs display; manual).
 
-**Exit criteria:** Two machines (or two local processes) complete legal moves both directions over TCP.
+**Exit criteria:** Two machines (or two local processes) complete legal moves both directions over TCP.  
+**Status 2026-08-06:** Transport + protocol + game wire-up land; headless session smoke **PASS**. Two-GUI playtest pending when display available.
 
 ### Phase 2 — UX and robustness
 
@@ -557,6 +559,7 @@ app: wire --host/--join and per-frame net pump
 | Date | Change |
 |------|--------|
 | 2026-08-06 | Initial full design: host-authoritative TCP VCC1, phases 0–4, protocol, testing, risks |
+| 2026-08-06 | Phase 1 implemented: TcpSocket, NetProtocol, NetSession, ChessGame net path, CLI host/join |
 
 ---
 
