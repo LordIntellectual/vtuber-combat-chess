@@ -1,3 +1,4 @@
+#define GL_GLEXT_PROTOTYPES
 #include "MainMenu.hxx"
 #include <cstdio>
 #include <cstring>

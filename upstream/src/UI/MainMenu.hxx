@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-#include "../gl_compat.hxx"
+#include <GLFW/glfw3.h>
 #include "../Network/LobbyClient.hxx"
 
 /**
