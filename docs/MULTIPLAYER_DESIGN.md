@@ -283,11 +283,21 @@ Env overrides (optional):
 | `VCC_JOIN` | Implicit join target if no `--join` |
 | `VCC_RELAY` | Phase 3 relay endpoint (private config only) |
 
-### 7.2 Phase 2 (in-game UI)
+### 7.2 In-game UI (Main Menu — landed)
 
-- Keys (proposal): **N** multiplayer panel; **O** host; join field for IP.  
-- Settings page “Network” with port + last join address (local file under user config, not repo).  
-- HUD: `NET HOST | waiting`, `NET | connected as Black`, RTT from PING.
+After pre-alpha splash, **Main Menu** offers:
+
+| Button | Behavior |
+|--------|----------|
+| **Single Player** | Offline (AI / hotseat); same as prior default launch |
+| **Multiplayer** | Sub-page: **Host Game**, join address field, **Join Game**, **Back** |
+| **Settings** | Existing Sound / Video / Gameplay menu |
+
+**Esc** while in a match returns to Main Menu (closes net session, resets board). Esc on multiplayer sub-page goes back to root; Esc on root quits (same as **Quit**).
+
+CLI `--host` / `--join` still skips the menu into a match (optional power-user path).
+
+Remaining polish: persist last join address, HUD net RTT, reconnect grace.
 
 ### 7.3 Side assignment
 
