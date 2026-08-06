@@ -10,6 +10,7 @@
 
 /**
  * Host or client multiplayer session (VCC1).
+ * Supports direct TCP host/join and VPS relay (both peers outbound).
  * Call pump() once per frame from the main thread.
  */
 class NetSession {
@@ -36,14 +37,23 @@ public:
   bool inGame() const { return phase_ == PHASE_INGAME; }
   bool peerConnected() const { return peer_.valid() && phase_ >= PHASE_HANDSHAKE &&
                                       phase_ != PHASE_CLOSED; }
+  bool isRelay() const { return relayMode_; }
 
-  /** Host listens; default host=white, guest=black. */
+  /** Host listens; default host=white, guest=black (LAN / direct). */
   bool startHost(uint16_t port, std::string* err = nullptr);
 
-  /** Client connects to host:port. */
+  /** Client connects to host:port (LAN / direct). */
   bool startClient(const std::string& host, uint16_t port,
                    const std::string& displayName = "Guest",
                    std::string* err = nullptr);
+
+  /**
+   * Online rooms via VPS relay: both host and guest connect outbound.
+   * role must be "host" or "guest"; token from lobby create/join.
+   */
+  bool startRelay(const std::string& relayHost, uint16_t relayPort,
+                  const std::string& token, const std::string& role,
+                  std::string* err = nullptr);
 
   void close(const std::string& reason = "closed");
 
@@ -90,7 +100,15 @@ private:
   double lastPingTime_;
   double connectStartTime_;
 
+  // Relay mode
+  bool relayMode_;
+  bool relayPaired_;
+  bool relayHelloSent_;
+  std::string relayToken_;
+  std::string relayRole_; // "host" | "guest"
+
   void handleLine(const std::string& line);
+  void handleRelayLine(const std::string& line);
   void setError(const std::string& e);
   static double nowSec();
   static std::string randomSessionId();

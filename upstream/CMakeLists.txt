@@ -58,6 +58,7 @@ set(
   ${CMAKE_SOURCE_DIR}/src/Network/TcpSocket.cxx
   ${CMAKE_SOURCE_DIR}/src/Network/NetProtocol.cxx
   ${CMAKE_SOURCE_DIR}/src/Network/NetSession.cxx
+  ${CMAKE_SOURCE_DIR}/src/Network/LobbyClient.cxx
 )
 
 install(DIRECTORY "${TOONCHESS_SHARE_DIR}/toonchess" DESTINATION "share")
