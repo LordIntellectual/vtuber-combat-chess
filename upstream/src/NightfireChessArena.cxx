@@ -44,6 +44,7 @@
 #include "PieceSet/PieceTransform.hxx"
 #include "Network/NetSession.hxx"
 #include "Network/NetProtocol.hxx"
+#include "Network/LobbyClient.hxx"
 #include "get_share_path.hxx"
 
 // Globals
@@ -866,44 +867,75 @@ int main(int argc, char** argv) {
         hud.setEvent(std::string("Single Player — Set: ") + pieceSets.current().name);
         std::cout << "[VCC] Single Player\n";
       }
-      if (act == MainMenu::ACTION_HOST) {
+      if (act == MainMenu::ACTION_REFRESH_ROOMS) {
+        std::vector<LobbyRoom> rooms;
         std::string err;
-        unsigned short port = mainMenu.hostPort();
-        if (netSession.active()) netSession.close("rehost");
-        if (!netSession.startHost(port, &err)) {
-          mainMenu.setStatus("Host failed: " + err);
+        if (!mainMenu.lobby().listRooms(rooms, &err)) {
+          mainMenu.setStatus("Lobby unreachable: " + err);
           audio.playSfx("sfx_illegal");
         } else {
-          game->setNetworkRole(ChessGame::NET_HOST, 1);
-          game->resetBoard();
-          victory.hide();
-          mainMenu.hide();
-          gInGame = true;
-          audio.playSfx("sfx_theme");
-          hud.setEvent("Hosting on port " + std::to_string(port) + " — waiting for guest");
-          std::cout << "[VCC-NET] UI host on " << port << "\n";
+          mainMenu.setRooms(rooms);
+          mainMenu.setStatus(std::string("Rooms: ") + std::to_string(rooms.size()) +
+                             " @ " + mainMenu.lobby().host());
+          audio.playSfx("sfx_select");
         }
       }
-      if (act == MainMenu::ACTION_JOIN) {
-        std::string host;
-        uint16_t jp = 7777;
-        if (!TcpSocket::parseHostPort(mainMenu.joinAddress(), host, jp)) {
-          mainMenu.setStatus("Invalid address (use HOST:PORT)");
+      if (act == MainMenu::ACTION_HOST_ONLINE) {
+        std::string err;
+        LobbySession sess = mainMenu.lobby().createRoom(
+          mainMenu.hostRoomName(), mainMenu.hostPassword(), &err);
+        if (!sess.ok || sess.token.empty()) {
+          mainMenu.setStatus("Host failed: " + (err.empty() ? sess.error : err));
           audio.playSfx("sfx_illegal");
         } else {
-          std::string err;
-          if (netSession.active()) netSession.close("rejoin");
-          if (!netSession.startClient(host, jp, "Guest", &err)) {
-            mainMenu.setStatus("Join failed: " + err);
+          if (netSession.active()) netSession.close("rehost");
+          std::string rerr;
+          if (!netSession.startRelay(mainMenu.lobby().host(), sess.relayPort,
+                                     sess.token, "host", &rerr)) {
+            mainMenu.setStatus("Relay failed: " + rerr);
             audio.playSfx("sfx_illegal");
           } else {
-            // Client role finalized on WELCOME
+            game->setNetworkRole(ChessGame::NET_HOST, 1);
+            game->resetBoard();
             victory.hide();
             mainMenu.hide();
             gInGame = true;
             audio.playSfx("sfx_theme");
-            hud.setEvent("Connecting to " + mainMenu.joinAddress());
-            std::cout << "[VCC-NET] UI join " << mainMenu.joinAddress() << "\n";
+            hud.setEvent("Online room hosted — waiting for guest");
+            std::cout << "[VCC-NET] online host room=" << sess.roomId << "\n";
+          }
+        }
+      }
+      if (act == MainMenu::ACTION_JOIN_ONLINE) {
+        const LobbyRoom* room = mainMenu.selectedRoom();
+        if (!room) {
+          mainMenu.setStatus("Select a room from the list first");
+          audio.playSfx("sfx_illegal");
+        } else if (room->full) {
+          mainMenu.setStatus("Room is full");
+          audio.playSfx("sfx_illegal");
+        } else {
+          std::string err;
+          LobbySession sess = mainMenu.lobby().joinRoom(
+            room->id, mainMenu.joinPassword(), &err);
+          if (!sess.ok || sess.token.empty()) {
+            mainMenu.setStatus("Join failed: " + (err.empty() ? sess.error : err));
+            audio.playSfx("sfx_illegal");
+          } else {
+            if (netSession.active()) netSession.close("rejoin");
+            std::string rerr;
+            if (!netSession.startRelay(mainMenu.lobby().host(), sess.relayPort,
+                                       sess.token, "guest", &rerr)) {
+              mainMenu.setStatus("Relay failed: " + rerr);
+              audio.playSfx("sfx_illegal");
+            } else {
+              victory.hide();
+              mainMenu.hide();
+              gInGame = true;
+              audio.playSfx("sfx_theme");
+              hud.setEvent("Joining " + room->name + "…");
+              std::cout << "[VCC-NET] online join room=" << room->id << "\n";
+            }
           }
         }
       }

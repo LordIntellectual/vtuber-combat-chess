@@ -1,0 +1,16 @@
+[Unit]
+Description=vTuber Combat Chess lobby + relay
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/vcc-multiplayer
+ExecStart=/usr/bin/python3 /opt/vcc-multiplayer/vcc_lobby_relay.py
+Restart=always
+RestartSec=2
+Environment=VCC_LOBBY_PORT=8080
+Environment=VCC_RELAY_PORT=7777
+# No secrets required for open room list MVP
+
+[Install]
+WantedBy=multi-user.target

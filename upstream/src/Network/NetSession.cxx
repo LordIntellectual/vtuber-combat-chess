@@ -43,7 +43,10 @@ NetSession::NetSession()
     port_(7777),
     peerJustJoined_(false),
     lastPingTime_(0),
-    connectStartTime_(0) {}
+    connectStartTime_(0),
+    relayMode_(false),
+    relayPaired_(false),
+    relayHelloSent_(false) {}
 
 NetSession::~NetSession() { close("dtor"); }
 
@@ -55,6 +58,7 @@ void NetSession::setError(const std::string& e) {
 
 bool NetSession::startHost(uint16_t port, std::string* err) {
   close("restart");
+  relayMode_ = false;
   role_ = ROLE_HOST;
   port_ = port;
   localSide_ = "white";
@@ -77,6 +81,7 @@ bool NetSession::startHost(uint16_t port, std::string* err) {
 bool NetSession::startClient(const std::string& host, uint16_t port,
                              const std::string& displayName, std::string* err) {
   close("restart");
+  relayMode_ = false;
   role_ = ROLE_CLIENT;
   port_ = port;
   joinHost_ = host;
@@ -99,11 +104,52 @@ bool NetSession::startClient(const std::string& host, uint16_t port,
   return true;
 }
 
+bool NetSession::startRelay(const std::string& relayHost, uint16_t relayPort,
+                            const std::string& token, const std::string& role,
+                            std::string* err) {
+  close("restart");
+  relayMode_ = true;
+  relayPaired_ = false;
+  relayHelloSent_ = false;
+  relayToken_ = token;
+  relayRole_ = role;
+  port_ = relayPort;
+  joinHost_ = relayHost;
+  sessionId_ = randomSessionId();
+  if (role == "host") {
+    role_ = ROLE_HOST;
+    localSide_ = "white";
+    remoteSide_ = "black";
+  } else {
+    role_ = ROLE_CLIENT;
+    localSide_ = "black";
+    remoteSide_ = "white";
+  }
+  displayName_ = role == "host" ? "Host" : "Guest";
+  std::string e;
+  if (!peer_.connectBegin(relayHost, relayPort, &e)) {
+    setError(e);
+    if (err) *err = e;
+    role_ = ROLE_NONE;
+    phase_ = PHASE_IDLE;
+    relayMode_ = false;
+    return false;
+  }
+  phase_ = PHASE_CONNECTING;
+  connectStartTime_ = nowSec();
+  status_ = "Relay connecting…";
+  std::cout << "[VCC-NET] relay " << role << " → " << relayHost << ":" << relayPort
+            << std::endl;
+  return true;
+}
+
 void NetSession::close(const std::string& reason) {
   if (peer_.valid() && phase_ != PHASE_IDLE && phase_ != PHASE_CLOSED) {
-    NetProtocol::Message gb = NetProtocol::makeGoodbye(reason);
-    std::string dummy;
-    peer_.sendAll(NetProtocol::encode(gb), sendPending_);
+    if (!relayMode_ || relayPaired_) {
+      NetProtocol::Message gb = NetProtocol::makeGoodbye(reason);
+      std::string dummy;
+      peer_.sendAll(NetProtocol::encode(gb), sendPending_);
+    }
   }
   peer_.close();
   listen_.close();
@@ -117,6 +163,11 @@ void NetSession::close(const std::string& reason) {
   }
   role_ = ROLE_NONE;
   peerJustJoined_ = false;
+  relayMode_ = false;
+  relayPaired_ = false;
+  relayHelloSent_ = false;
+  relayToken_.clear();
+  relayRole_.clear();
 }
 
 void NetSession::send(const NetProtocol::Message& msg) {
@@ -134,7 +185,50 @@ bool NetSession::pollMessage(NetProtocol::Message& out) {
   return true;
 }
 
+void NetSession::handleRelayLine(const std::string& line) {
+  // VCCREL1 TYPE key=val...
+  std::istringstream iss(line);
+  std::string magic, type;
+  iss >> magic >> type;
+  if (magic != "VCCREL1") return;
+  if (type == "WELCOME") {
+    status_ = "Relay OK — waiting for opponent…";
+    std::cout << "[VCC-NET] relay WELCOME " << line << std::endl;
+    return;
+  }
+  if (type == "PAIRED") {
+    relayPaired_ = true;
+    std::cout << "[VCC-NET] relay PAIRED\n";
+    if (role_ == ROLE_HOST) {
+      // Wait for guest VCC1 HELLO over the pipe
+      phase_ = PHASE_HANDSHAKE;
+      status_ = "Opponent connected — starting…";
+    } else {
+      // Guest sends VCC1 HELLO to host through relay
+      phase_ = PHASE_HANDSHAKE;
+      status_ = "Paired — handshake";
+      send(NetProtocol::makeHello(displayName_));
+    }
+    lastPingTime_ = nowSec();
+    return;
+  }
+  if (type == "PEER_LEFT") {
+    close("peer_left");
+    return;
+  }
+  if (type == "ERROR") {
+    setError("relay error: " + line);
+    close("relay_error");
+    return;
+  }
+}
+
 void NetSession::handleLine(const std::string& line) {
+  if (line.size() >= 7 && line.compare(0, 7, "VCCREL1") == 0) {
+    handleRelayLine(line);
+    return;
+  }
+
   NetProtocol::Message msg;
   if (!NetProtocol::decode(line, msg)) {
     std::cerr << "[VCC-NET] bad line ignored\n";
@@ -189,7 +283,7 @@ void NetSession::handleLine(const std::string& line) {
 void NetSession::pump() {
   if (phase_ == PHASE_IDLE || phase_ == PHASE_CLOSED) return;
 
-  // Client connect progress
+  // Client / relay connect progress
   if (phase_ == PHASE_CONNECTING) {
     std::string e;
     TcpSocket::ConnectStatus st = peer_.connectPoll(&e);
@@ -205,15 +299,30 @@ void NetSession::pump() {
       close("connect_failed");
       return;
     }
-    // Connected — send HELLO
-    phase_ = PHASE_HANDSHAKE;
-    status_ = "Connected — handshake";
-    send(NetProtocol::makeHello(displayName_));
-    lastPingTime_ = nowSec();
+    if (relayMode_) {
+      // Send relay HELLO (not VCC1 yet)
+      std::string hello = "VCCREL1 HELLO token=" + relayToken_ +
+                          " role=" + relayRole_ + "\n";
+      if (!peer_.sendAll(hello, sendPending_)) {
+        setError("relay hello send failed");
+        close("send_error");
+        return;
+      }
+      relayHelloSent_ = true;
+      phase_ = PHASE_HANDSHAKE;
+      status_ = "Relay connected — waiting to pair…";
+      lastPingTime_ = nowSec();
+    } else {
+      // Direct client — send VCC1 HELLO
+      phase_ = PHASE_HANDSHAKE;
+      status_ = "Connected — handshake";
+      send(NetProtocol::makeHello(displayName_));
+      lastPingTime_ = nowSec();
+    }
   }
 
-  // Host accept (only one peer)
-  if (phase_ == PHASE_LISTENING && !peer_.valid()) {
+  // Host accept (only one peer) — direct mode only
+  if (!relayMode_ && phase_ == PHASE_LISTENING && !peer_.valid()) {
     std::string peerAddr;
     if (listen_.tryAccept(peer_, &peerAddr)) {
       phase_ = PHASE_HANDSHAKE;
