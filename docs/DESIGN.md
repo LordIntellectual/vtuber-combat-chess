@@ -73,9 +73,11 @@ Pre-alpha splash before music/control. Victory screen on checkmate/forfeit.
 - Endgame: checkmate and forfeit (lone king) handled locally with victory UI
 
 ## Non-goals (v1)
-- Full online multiplayer
 - Photo-realistic PBR meshes per theme (palette + shaders + set meshes instead)
 - Full FIDE completeness (castling/en passant still limited where base engine was)
+
+## Multiplayer
+Online host/join multiplayer is an active workstream. Spec: **[MULTIPLAYER_DESIGN.md](MULTIPLAYER_DESIGN.md)** (host-authoritative TCP, protocol VCC1). Local hotseat (AI OFF) remains supported.
 
 ## Build
 Same stack as ToonChess: CMake, GLFW (fetched), OpenGL, Bullet 2.87 (local), PNG, Stockfish runtime.  
