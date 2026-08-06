@@ -52,10 +52,17 @@ There is **no official support**. You may download, compile, and run it at your 
 
 ### Main Menu & multiplayer (experimental)
 
-After the pre-alpha splash: **Single Player**, **Multiplayer** (online room list / host / join), **Settings**.  
-**Esc** in a match returns to the Main Menu. Online rooms use a lobby + relay (no peer IPs). Spec: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
+After the pre-alpha splash you get a **Main Menu**:
 
-Optional CLI: `--host [PORT]`, `--join HOST:PORT`.
+| Option | Effect |
+|--------|--------|
+| **Single Player** | Offline game (Stockfish AI / local hotseat with **A**) |
+| **Multiplayer** | Online room list — host a named room or join (optional password) |
+| **Settings** | Sound / Video / Gameplay (same menu as in-game **S**) |
+
+**Esc** while playing returns to the Main Menu (does not quit). Quit from the menu **Quit** button (or Esc on the root menu).
+
+Online multiplayer uses a lobby + relay so players do not exchange IPs. Spec: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md). Optional CLI: `--host [PORT]`, `--join HOST:PORT`.
 
 ## Requirements (Linux)
 

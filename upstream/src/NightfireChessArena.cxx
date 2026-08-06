@@ -40,6 +40,7 @@
 #include "UI/PieceEditor.hxx"
 #include "UI/VictoryScreen.hxx"
 #include "UI/PreAlphaSplash.hxx"
+#include "UI/MainMenu.hxx"
 #include "Environment/Starfield.hxx"
 #include "PieceSet/PieceSet.hxx"
 #include "PieceSet/PieceTransform.hxx"
@@ -74,6 +75,11 @@ std::map<int, std::vector<Mesh*>>* gFragmentMeshes = nullptr;
 PhysicsWorld* gPhysics = nullptr;
 bool gRunning = true;
 NetSession* gNet = nullptr;
+MainMenu* gMainMenu = nullptr;
+/** True while playing (single or multi); false on main menu. */
+bool gInGame = false;
+/** Settings opened from main menu (return to menu when closed via Esc). */
+bool gSettingsFromMenu = false;
 
 static std::string ncaShareRoot() {
   std::string p = get_share_path(); // .../share/toonchess/
@@ -105,16 +111,53 @@ void applyThemeAudio() {
   std::cout << "[VCC] Theme: " << gThemes->current().name << std::endl;
 }
 
+/** Leave match and show main menu (Esc from in-game). */
+static void returnToMainMenu() {
+  if (gVictory) gVictory->hide();
+  if (gSettings && gSettings->isOpen()) gSettings->closeMenu();
+  if (gNet) gNet->close("return_to_menu");
+  if (gGame) {
+    gGame->clearNetworkRole();
+    gGame->resetBoard();
+    gGame->setAiEnabled(true);
+  }
+  gInGame = false;
+  gSettingsFromMenu = false;
+  cameraMoving = false;
+  selecting = false;
+  if (gCamera) gCamera->setDragging(false);
+  if (gMainMenu) {
+    gMainMenu->show();
+    gMainMenu->setStatus("");
+  }
+  if (gHud) gHud->setEvent("Main Menu");
+  if (gAudio) gAudio->playSfx("sfx_select");
+  std::cout << "[VCC] Returned to Main Menu\n";
+}
+
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
   (void)scancode;
   // Allow key-repeat while typing into value fields
   if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
 
-  // Esc: back in settings, then close settings, then quit
+  // Esc: settings back → main menu multipage back → return to main menu (in-game) → quit (menu root)
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     if (gSettings && gSettings->isOpen()) {
       bool stillOpen = gSettings->handleBack();
       if (gHud) gHud->setEvent(stillOpen ? "Settings" : "Settings closed");
+      if (!stillOpen && gSettingsFromMenu && gMainMenu) {
+        gMainMenu->show();
+        gSettingsFromMenu = false;
+      }
+      return;
+    }
+    if (gMainMenu && gMainMenu->isVisible()) {
+      gMainMenu->onKey(key, action, mods);
+      return;
+    }
+    // In-game: Esc returns to Main Menu (does not quit)
+    if (gInGame) {
+      returnToMainMenu();
       return;
     }
     gRunning = false;
@@ -134,16 +177,30 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
       gSettings->toggle();
       if (gHud) gHud->setEvent(gSettings->isOpen() ? "Settings" : "Settings closed");
       if (gAudio) gAudio->playSfx("sfx_select");
+      if (!gSettings->isOpen() && gSettingsFromMenu && gMainMenu) {
+        gMainMenu->show();
+        gSettingsFromMenu = false;
+      }
+    }
+    return;
+  }
+
+  // Main menu captures keys (join address typing, shortcuts)
+  if (gMainMenu && gMainMenu->isVisible()) {
+    if (gMainMenu->onKey(key, action, mods)) {
+      if (gAudio && action == GLFW_PRESS) gAudio->playSfx("sfx_select");
     }
     return;
   }
 
   if (action != GLFW_PRESS) return;
   if (!gThemes || !gGame || !gAudio || !gHud) return;
+  if (!gInGame) return;
 
-  // S: settings menu
+  // S: settings menu (in-game)
   if (key == GLFW_KEY_S) {
     if (gSettings) {
+      gSettingsFromMenu = false;
       gSettings->toggle();
       gHud->setEvent(gSettings->isOpen() ? "Settings — Sound / Video / Gameplay" : "Settings closed");
       gAudio->playSfx("sfx_select");
@@ -248,6 +305,16 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
     return;
   }
 
+  // Main menu captures clicks
+  if (gMainMenu && gMainMenu->isVisible()) {
+    gMainMenu->onMouseButton(button, action, (float)mousePosition.x, (float)mousePosition.y);
+    cameraMoving = false;
+    if (gCamera) gCamera->setDragging(false);
+    return;
+  }
+
+  if (!gInGame) return;
+
   if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
     dX = 0; dY = 0; cameraMoving = true;
     if (gCamera) gCamera->setDragging(true);
@@ -278,6 +345,19 @@ void cursor_move_callback(GLFWwindow* window, double xpos, double ypos) {
     return;
   }
 
+  if (gMainMenu && gMainMenu->isVisible()) {
+    gMainMenu->onMouseMove((float)xposi, (float)yposi);
+    dX = 0;
+    dY = 0;
+    return;
+  }
+
+  if (!gInGame) {
+    dX = 0;
+    dY = 0;
+    return;
+  }
+
   // Accumulate deltas so multi-event frames are not lost; cleared after move().
   dX += dx;
   dY += dy;
@@ -292,7 +372,16 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     return;
   }
   if (gSettings && gSettings->isOpen()) return;
+  if (gMainMenu && gMainMenu->isVisible()) return;
+  if (!gInGame) return;
   if (gCamera) gCamera->zoom((GLfloat)yoffset);
+}
+
+void char_callback(GLFWwindow* window, unsigned int codepoint) {
+  (void)window;
+  if (gSettings && gSettings->isOpen()) return;
+  if (gMainMenu && gMainMenu->isVisible())
+    gMainMenu->onChar(codepoint);
 }
 
 void drawSkyGradient(const Theme& th) {
@@ -539,11 +628,13 @@ int main(int argc, char** argv) {
   SettingsMenu settings;
   PieceEditor pieceEditor;
   VictoryScreen victory;
+  MainMenu mainMenu;
   PieceTransformStore transforms;
   gHud = &hud;
   gSettings = &settings;
   gPieceEditor = &pieceEditor;
   gVictory = &victory;
+  gMainMenu = &mainMenu;
   gTransforms = &transforms;
   settings.setAudio(&audio);
   settings.setPieceEditor(&pieceEditor);
@@ -567,14 +658,20 @@ int main(int argc, char** argv) {
 
   NetSession netSession;
   gNet = &netSession;
+  // CLI host/join skips main menu and enters multiplayer directly
+  gInGame = false;
   if (wantHost) {
     std::string err;
     if (!netSession.startHost(netPort, &err)) {
       std::cerr << "[VCC-NET] host failed: " << err << std::endl;
       hud.setEvent("Host failed: " + err);
+      mainMenu.show();
+      mainMenu.setStatus("Host failed: " + err);
     } else {
       game->setNetworkRole(ChessGame::NET_HOST, /*white*/ 1);
       game->resetBoard();
+      gInGame = true;
+      mainMenu.hide();
       hud.setEvent("Hosting on port " + std::to_string(netPort));
     }
   } else if (wantJoin) {
@@ -583,15 +680,24 @@ int main(int argc, char** argv) {
     if (!TcpSocket::parseHostPort(joinTarget, host, jp)) {
       std::cerr << "[VCC-NET] invalid --join target (use HOST:PORT)\n";
       hud.setEvent("Invalid join address");
+      mainMenu.show();
+      mainMenu.setStatus("Invalid join address");
     } else {
       std::string err;
       if (!netSession.startClient(host, jp, "Guest", &err)) {
         std::cerr << "[VCC-NET] join failed: " << err << std::endl;
         hud.setEvent("Join failed: " + err);
+        mainMenu.show();
+        mainMenu.setStatus("Join failed: " + err);
       } else {
+        gInGame = true;
+        mainMenu.hide();
         hud.setEvent("Connecting to " + joinTarget);
       }
     }
+  } else {
+    mainMenu.show();
+    hud.setEvent("Main Menu");
   }
 
   SmokeGenerator* smokeGenerator = new SmokeGenerator();
@@ -651,14 +757,14 @@ int main(int argc, char** argv) {
   glfwSetCursorPosCallback(window, cursor_move_callback);
   glfwSetScrollCallback(window, scroll_callback);
   glfwSetKeyCallback(window, key_callback);
+  glfwSetCharCallback(window, char_callback);
 
-  std::cout << "[VCC] Controls: S settings | RMB orbit | wheel zoom | P pieces | H hide UI | 1/2/3 themes | A AI | M music\n";
+  std::cout << "[VCC] Main Menu after splash | Esc in-game = Main Menu | S settings\n";
+  std::cout << "[VCC] In-game: RMB orbit | wheel zoom | P pieces | H hide UI | 1/2/3 themes | A AI | M music\n";
   if (wantHost || wantJoin)
-    std::cout << "[VCC-NET] Multiplayer active — see docs/MULTIPLAYER_DESIGN.md\n";
+    std::cout << "[VCC-NET] CLI multiplayer active — see docs/MULTIPLAYER_DESIGN.md\n";
   else
-    std::cout << "[VCC-NET] Offline. Use --host or --join HOST:PORT for multiplayer.\n";
-  if (!(wantHost || wantJoin))
-    hud.setEvent(std::string("Set: ") + pieceSets.current().name + " — S for volume settings");
+    std::cout << "[VCC-NET] Multiplayer: Main Menu → Multiplayer → Host / Join\n";
 
   Clock frameClock;
   bool netWasInGame = false;
@@ -671,8 +777,8 @@ int main(int argc, char** argv) {
     audio.update();
     glfwPollEvents();
 
-    // Network pump (non-blocking)
-    if (netSession.active()) {
+    // Network pump (non-blocking) — only while in a match
+    if (gInGame && netSession.active()) {
       netSession.pump();
       if (netSession.consumePeerJustJoined()) {
         // Host: peer finished HELLO — reset + START
@@ -725,6 +831,82 @@ int main(int argc, char** argv) {
       break;
     }
 
+    // Main menu actions
+    if (mainMenu.isVisible() && !settings.isOpen()) {
+      MainMenu::Action act = mainMenu.consumeAction();
+      if (act == MainMenu::ACTION_QUIT) {
+        gRunning = false;
+        glfwSetWindowShouldClose(window, 1);
+        break;
+      }
+      if (act == MainMenu::ACTION_OPEN_SETTINGS) {
+        gSettingsFromMenu = true;
+        mainMenu.hide();
+        settings.openMenu();
+        audio.playSfx("sfx_select");
+        hud.setEvent("Settings");
+      }
+      if (act == MainMenu::ACTION_SINGLE_PLAYER) {
+        if (netSession.active()) netSession.close("single_player");
+        game->clearNetworkRole();
+        game->resetBoard();
+        game->setAiEnabled(true);
+        victory.hide();
+        mainMenu.hide();
+        gInGame = true;
+        audio.playSfx("sfx_theme");
+        hud.setEvent(std::string("Single Player — Set: ") + pieceSets.current().name);
+        std::cout << "[VCC] Single Player\n";
+      }
+      if (act == MainMenu::ACTION_HOST) {
+        std::string err;
+        unsigned short port = mainMenu.hostPort();
+        if (netSession.active()) netSession.close("rehost");
+        if (!netSession.startHost(port, &err)) {
+          mainMenu.setStatus("Host failed: " + err);
+          audio.playSfx("sfx_illegal");
+        } else {
+          game->setNetworkRole(ChessGame::NET_HOST, 1);
+          game->resetBoard();
+          victory.hide();
+          mainMenu.hide();
+          gInGame = true;
+          audio.playSfx("sfx_theme");
+          hud.setEvent("Hosting on port " + std::to_string(port) + " — waiting for guest");
+          std::cout << "[VCC-NET] UI host on " << port << "\n";
+        }
+      }
+      if (act == MainMenu::ACTION_JOIN) {
+        std::string host;
+        uint16_t jp = 7777;
+        if (!TcpSocket::parseHostPort(mainMenu.joinAddress(), host, jp)) {
+          mainMenu.setStatus("Invalid address (use HOST:PORT)");
+          audio.playSfx("sfx_illegal");
+        } else {
+          std::string err;
+          if (netSession.active()) netSession.close("rejoin");
+          if (!netSession.startClient(host, jp, "Guest", &err)) {
+            mainMenu.setStatus("Join failed: " + err);
+            audio.playSfx("sfx_illegal");
+          } else {
+            // Client role finalized on WELCOME
+            victory.hide();
+            mainMenu.hide();
+            gInGame = true;
+            audio.playSfx("sfx_theme");
+            hud.setEvent("Connecting to " + mainMenu.joinAddress());
+            std::cout << "[VCC-NET] UI join " << mainMenu.joinAddress() << "\n";
+          }
+        }
+      }
+    }
+
+    // Settings opened from main menu: restore menu when settings closes
+    if (gSettingsFromMenu && !settings.isOpen() && !gInGame) {
+      mainMenu.show();
+      gSettingsFromMenu = false;
+    }
+
     if (resizing) {
       colorPicking->resizeBuffers(width, height);
       camera->updatePerspective((double)width / height);
@@ -732,15 +914,18 @@ int main(int argc, char** argv) {
     }
     // Apply each mouse delta once, then clear — reusing last dY every frame
     // made pitch (tilt) jump while yaw happened to feel smoother.
-    if (cameraMoving && (dX != 0 || dY != 0)) {
+    if (gInGame && cameraMoving && (dX != 0 || dY != 0)) {
       camera->move((GLfloat)dX, (GLfloat)dY, (GLfloat)width / (GLfloat)height);
+      dX = 0;
+      dY = 0;
+    } else {
       dX = 0;
       dY = 0;
     }
     if (selecting) {
       selecting = false;
-      // No board selection during victory or settings
-      if (!victory.isOpen() && !settings.isOpen()) {
+      // No board selection during menu, victory or settings
+      if (gInGame && !mainMenu.isVisible() && !victory.isOpen() && !settings.isOpen()) {
         // Suppress suggested-move pulse in pick buffer when hints are off
         Vector2i sugS = game->suggestedUserMoveStartPosition;
         Vector2i sugE = game->suggestedUserMoveEndPosition;
@@ -761,22 +946,24 @@ int main(int argc, char** argv) {
     }
 
     int prevState = game->getState();
-    try {
-      game->perform();
-    } catch (const std::exception& e) {
-      std::cerr << "[VCC] perform: " << e.what() << std::endl;
-      hud.setEvent(e.what());
-      audio.playSfx("sfx_illegal");
-      // recover: don't kill session on bad AI move
-      if (game->getState() == AI_TURN) game->setAiEnabled(false);
-    } catch (...) {
-      std::cerr << "[VCC] perform: unknown exception\n";
-      hud.setEvent("Internal error (move)");
+    if (gInGame && !mainMenu.isVisible()) {
+      try {
+        game->perform();
+      } catch (const std::exception& e) {
+        std::cerr << "[VCC] perform: " << e.what() << std::endl;
+        hud.setEvent(e.what());
+        audio.playSfx("sfx_illegal");
+        // recover: don't kill session on bad AI move
+        if (game->getState() == AI_TURN) game->setAiEnabled(false);
+      } catch (...) {
+        std::cerr << "[VCC] perform: unknown exception\n";
+        hud.setEvent("Internal error (move)");
+      }
     }
     int st = game->getState();
     {
-      std::string status = stateName(st);
-      if (netSession.active() || netSession.phase() == NetSession::PHASE_CLOSED) {
+      std::string status = gInGame ? stateName(st) : "Main Menu";
+      if (gInGame && (netSession.active() || netSession.phase() == NetSession::PHASE_CLOSED)) {
         status += " | ";
         status += netSession.statusLine();
       }
@@ -1020,16 +1207,22 @@ int main(int argc, char** argv) {
       starfield.drawScreenFlare(width, height);
     }
 
-    hud.draw(width, height, themes, game->isAiEnabled(), audio.musicEnabled(),
-             &pieceSets);
+    // HUD only during play (menu has its own chrome)
+    if (gInGame && !mainMenu.isVisible()) {
+      hud.draw(width, height, themes, game->isAiEnabled(), audio.musicEnabled(),
+               &pieceSets);
+    }
+    mainMenu.draw(width, height);
     settings.draw(width, height);
     if (pieceEditor.isOpen())
       pieceEditor.draw(width, height, &programs, th, outlineF);
-    victory.draw(width, height);
+    if (gInGame) victory.draw(width, height);
 
     glfwSwapBuffers(window);
   }
 
+  gMainMenu = nullptr;
+  gNet = nullptr;
   glfwTerminate();
   PieceSetManager::freePieces(&pieces);
   PieceSetManager::freeFragments(&fragmentMeshes);

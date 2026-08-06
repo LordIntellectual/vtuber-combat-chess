@@ -51,6 +51,7 @@ set(
   ${CMAKE_SOURCE_DIR}/src/UI/PieceEditor.cxx
   ${CMAKE_SOURCE_DIR}/src/UI/VictoryScreen.cxx
   ${CMAKE_SOURCE_DIR}/src/UI/PreAlphaSplash.cxx
+  ${CMAKE_SOURCE_DIR}/src/UI/MainMenu.cxx
   ${CMAKE_SOURCE_DIR}/src/Environment/Starfield.cxx
   ${CMAKE_SOURCE_DIR}/src/PieceSet/PieceSet.cxx
   ${CMAKE_SOURCE_DIR}/src/PieceSet/PieceTransform.cxx
