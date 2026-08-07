@@ -1325,9 +1325,10 @@ int main(int argc, char** argv) {
       }
     }
 
-    // Full-band reactive menu chrome (pulse + optional electric borders)
+    // Full-band reactive menu chrome (optional pulse + electric borders)
     mainMenu.setMusicDrive(audio.musicLevel(), settings.menuPulseSensitivity(),
                            audio.musicBassLevel());
+    mainMenu.setPulseEnabled(settings.menuPulseEnabled());
     mainMenu.setElectricBordersEnabled(settings.menuElectricBordersEnabled());
     mainMenu.draw(width, height);
     settings.draw(width, height);
