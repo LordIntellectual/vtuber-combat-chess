@@ -149,6 +149,9 @@ void MainMenu::rebuild() {
 }
 
 void MainMenu::layout(int w, int h) {
+  // Guard against zero/invalid sizes (avoids off-screen UI)
+  if (w < 1) w = 1280;
+  if (h < 1) h = 720;
   lastW = w;
   lastH = h;
   if (page_ == PAGE_ROOT) {
@@ -171,69 +174,68 @@ void MainMenu::layout(int w, int h) {
       buttons[i].y = y;
       y += btnH + gap;
     }
-    return;
-  }
+  } else {
+    // Multiplayer: list + join password + action buttons (no host fields)
+    float y = panelY + 70.f;
+    listX = panelX + 24.f;
+    listW = panelW - 48.f;
+    listY = y;
+    listH = 200.f;
+    y = listY + listH + 16.f;
 
-  // Multiplayer: list + join password + action buttons (no host fields)
-  float y = panelY + 70.f;
-  listX = panelX + 24.f;
-  listW = panelW - 48.f;
-  listY = y;
-  listH = 200.f;
-  y = listY + listH + 16.f;
+    jpX = listX;
+    jpY = y;
+    jpW = listW * 0.55f;
+    jpH = 32.f;
+    y += 48.f;
 
-  jpX = listX;
-  jpY = y;
-  jpW = listW * 0.55f;
-  jpH = 32.f;
-  y += 48.f;
-
-  const float btnW = 200.f, btnH = 40.f, gap = 10.f;
-  float bx = listX;
-  float by = y;
-  for (int i = 0; i < buttonCount; ++i) {
-    buttons[i].w = btnW;
-    buttons[i].h = btnH;
-    if (bx + btnW > listX + listW + 1.f) {
-      bx = listX;
-      by += btnH + gap;
+    const float btnW = 200.f, btnH = 40.f, gap = 10.f;
+    float bx = listX;
+    float by = y;
+    for (int i = 0; i < buttonCount; ++i) {
+      buttons[i].w = btnW;
+      buttons[i].h = btnH;
+      if (bx + btnW > listX + listW + 1.f) {
+        bx = listX;
+        by += btnH + gap;
+      }
+      buttons[i].x = bx;
+      buttons[i].y = by;
+      bx += btnW + gap;
     }
-    buttons[i].x = bx;
-    buttons[i].y = by;
-    bx += btnW + gap;
+
+    // Host dialog centered on screen
+    dlgW = 440.f;
+    dlgH = 280.f;
+    dlgX = (w - dlgW) * 0.5f;
+    dlgY = (h - dlgH) * 0.5f;
+
+    hnX = dlgX + 28.f;
+    hnY = dlgY + 88.f;
+    hnW = dlgW - 56.f;
+    hnH = 34.f;
+
+    hpX = dlgX + 28.f;
+    hpY = dlgY + 150.f;
+    hpW = dlgW - 56.f;
+    hpH = 34.f;
+
+    float pbW = 150.f, pbH = 40.f;
+    float gapB = 16.f;
+    float total = pbW * 2 + gapB;
+    float startX = dlgX + (dlgW - total) * 0.5f;
+    float pby = dlgY + dlgH - 58.f;
+    popupButtons[0].w = pbW;
+    popupButtons[0].h = pbH;
+    popupButtons[0].x = startX;
+    popupButtons[0].y = pby;
+    popupButtons[1].w = pbW;
+    popupButtons[1].h = pbH;
+    popupButtons[1].x = startX + pbW + gapB;
+    popupButtons[1].y = pby;
   }
 
-  // Host dialog centered on screen
-  dlgW = 440.f;
-  dlgH = 280.f;
-  dlgX = (w - dlgW) * 0.5f;
-  dlgY = (h - dlgH) * 0.5f;
-
-  hnX = dlgX + 28.f;
-  hnY = dlgY + 88.f;
-  hnW = dlgW - 56.f;
-  hnH = 34.f;
-
-  hpX = dlgX + 28.f;
-  hpY = dlgY + 150.f;
-  hpW = dlgW - 56.f;
-  hpH = 34.f;
-
-  float pbW = 150.f, pbH = 40.f;
-  float gapB = 16.f;
-  float total = pbW * 2 + gapB;
-  float startX = dlgX + (dlgW - total) * 0.5f;
-  float pby = dlgY + dlgH - 58.f;
-  popupButtons[0].w = pbW;
-  popupButtons[0].h = pbH;
-  popupButtons[0].x = startX;
-  popupButtons[0].y = pby;
-  popupButtons[1].w = pbW;
-  popupButtons[1].h = pbH;
-  popupButtons[1].x = startX + pbW + gapB;
-  popupButtons[1].y = pby;
-
-  // Quit confirmation centered
+  // Quit confirmation always laid out (Main Menu root returns early used to skip this)
   quitPanelW = 440.f;
   quitPanelH = 200.f;
   quitPanelX = (w - quitPanelW) * 0.5f;
