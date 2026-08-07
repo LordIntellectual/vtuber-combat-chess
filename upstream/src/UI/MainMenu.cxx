@@ -435,8 +435,8 @@ void MainMenu::updateMusicPulse(float dt) {
   if (drive < idle * 0.5f)
     drive = idle * 0.5f;
   pulseBright_ = drive;
-  // Size: up to ~4.5% larger on hard kicks (was 6% and too busy)
-  pulseScale_ = 1.f + 0.045f * drive;
+  // Size: up to 10% larger on hard kicks
+  pulseScale_ = 1.f + 0.10f * drive;
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {

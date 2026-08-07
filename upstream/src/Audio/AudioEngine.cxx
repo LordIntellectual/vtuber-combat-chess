@@ -9,7 +9,7 @@
 
 AudioEngine::AudioEngine()
   : ready(false), musicOn(true), musicFullTrack(false),
-    masterVol(0.9f), musicVol(0.45f), sfxVol(0.7f),
+    masterVol(0.9f), musicVol(0.60f), sfxVol(0.7f),
     engine(nullptr), musicSound(nullptr), musicFadeOut(nullptr),
     musicGain(1.f), fadeOutGain(0.f), fadeT(0.f), fadeDur(1.6f),
     fading(false), analysisDecoder(nullptr),
