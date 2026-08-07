@@ -436,7 +436,9 @@ void celShadingRender(
   const Vector3f* neonLightPos = nullptr,
   const Vector3f* neonLightColor = nullptr,
   const float* neonLightIntensity = nullptr,
-  int neonLightCount = 0);
+  int neonLightCount = 0,
+  float outlineWhiteR = 0.95f, float outlineWhiteG = 0.12f, float outlineWhiteB = 0.12f,
+  float outlineBlackR = 0.15f, float outlineBlackG = 0.40f, float outlineBlackB = 0.95f);
 
 static void printNetUsage() {
   std::cout << "Multiplayer (experimental):\n"
@@ -1229,7 +1231,9 @@ int main(int argc, char** argv) {
     celShadingRender(
       game, physicsWorld, &pieces, &programs, shadowMapping, camera, &light,
       elapsedTime, th, shake, hover, outlineF, &transforms, &activeSet,
-      neonPos, neonCol, neonInt, neonCount);
+      neonPos, neonCol, neonInt, neonCount,
+      settings.outlineWhiteR(), settings.outlineWhiteG(), settings.outlineWhiteB(),
+      settings.outlineBlackR(), settings.outlineBlackG(), settings.outlineBlackB());
 
     // Restore suggestion coords so next AI move still has data when re-enabled
     game->suggestedUserMoveStartPosition = sugSaveS;
@@ -1297,7 +1301,13 @@ void celShadingRender(
     const Vector3f* neonLightPos,
     const Vector3f* neonLightColor,
     const float* neonLightIntensity,
-    int neonLightCount) {
+    int neonLightCount,
+    float outlineWhiteR,
+    float outlineWhiteG,
+    float outlineWhiteB,
+    float outlineBlackR,
+    float outlineBlackG,
+    float outlineBlackB) {
   std::vector<GLfloat> movementMatrix;
   Vector3f translation;
   Vector3f rotation = {0, 0, 1};
@@ -1330,6 +1340,18 @@ void celShadingRender(
   // Normal-based outline thickness (Video settings). 0 disables silhouette shell.
   blackBorderProgram->setFloat("outlineFactor", outlineFactor);
 
+  auto setOutlineSide = [&](int pieceSigned) {
+    // White / user (positive) vs black / AI (negative). Board uses black.
+    if (pieceSigned > 0)
+      blackBorderProgram->setVector4f(
+        "outlineColor", outlineWhiteR, outlineWhiteG, outlineWhiteB, 1.f);
+    else if (pieceSigned < 0)
+      blackBorderProgram->setVector4f(
+        "outlineColor", outlineBlackR, outlineBlackG, outlineBlackB, 1.f);
+    else
+      blackBorderProgram->setVector4f("outlineColor", 0.f, 0.f, 0.f, 1.f);
+  };
+
   for (unsigned int i = 0; i < physicsWorld->fragmentPool.size(); i++) {
     Fragment* fragment = physicsWorld->fragmentPool.at(i).second;
     movementMatrix = fragment->getMoveMatrix();
@@ -1337,6 +1359,7 @@ void celShadingRender(
     std::vector<GLfloat> normalMatrix = inverse(&movementMatrix);
     normalMatrix = transpose(&normalMatrix);
     blackBorderProgram->setNormalMatrix(&normalMatrix);
+    setOutlineSide(physicsWorld->fragmentPool.at(i).first);
     fragment->mesh->draw();
   }
 
@@ -1354,6 +1377,7 @@ void celShadingRender(
       movementMatrix = getIdentityMatrix();
       movementMatrix = translate(&movementMatrix, translation);
       blackBorderProgram->setMoveMatrix(&movementMatrix);
+      setOutlineSide(0); // board: black outline
       pieces->at(BOARDCELL)->draw();
 
       if (piece != EMPTY) {
@@ -1362,6 +1386,7 @@ void celShadingRender(
           movementMatrix = pieceMatrix(
             piece, translation.x, translation.y, translation.z);
           blackBorderProgram->setMoveMatrix(&movementMatrix);
+          setOutlineSide(piece);
           pieces->at(pk)->draw();
         }
       }
@@ -1378,6 +1403,7 @@ void celShadingRender(
       movementMatrix = pieceMatrix(
         game->movingPiece, translation.x, translation.y, translation.z);
       blackBorderProgram->setMoveMatrix(&movementMatrix);
+      setOutlineSide(game->movingPiece);
       pieces->at(mk)->draw();
     }
   }
