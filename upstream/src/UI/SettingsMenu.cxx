@@ -407,7 +407,7 @@ void SettingsMenu::draw(int screenW, int screenH) {
 
   const char* hint = "Click a category  |  S / Esc to close";
   if (page == PAGE_SOUND)
-    hint = "Menu pulse = bass reaction strength  |  Esc";
+    hint = "Menu pulse = music reaction strength  |  Esc";
   if (page == PAGE_VIDEO) hint = "Click number to type exact %  |  Esc";
   if (page == PAGE_GAMEPLAY) hint = "Click number to type exact %  |  Esc";
   drawText(panelX + 24, panelY + 46, hint, 0.65f, 0.7f, 0.8f, 1.1f);

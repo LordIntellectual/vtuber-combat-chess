@@ -44,11 +44,11 @@ public:
 
   /**
    * Feed music analysis for beat pulse / electric borders.
-   * @param bass       low-frequency envelope 0..1 (preferred drive source)
-   * @param sensitivity 0..1 player setting (0 = calm, 1 = strong)
-   * @param level      optional broadband level (ignored for pulse; reserved)
+   * @param level        broadband music envelope 0..1 (primary drive)
+   * @param sensitivity  0..1 player setting (0 = calm, 1 = strong)
+   * @param bass         optional low-band envelope (extra crackle spice)
    */
-  void setMusicDrive(float bass, float sensitivity, float level = 0.f);
+  void setMusicDrive(float level, float sensitivity, float bass = 0.f);
 
   void draw(int screenW, int screenH);
 
@@ -108,7 +108,8 @@ private:
   float fovYDeg_;
   float uiLayerPanX_, uiLayerPanY_; // pixel pan applied to UI FBO this frame
 
-  // Music-reactive chrome (bass-only pulse + electric borders)
+  // Music-reactive chrome (full-band pulse + electric borders)
+  float musicLevel_;
   float musicBass_;
   float musicSensitivity_; // 0..1 from Settings
   float pulseBright_; // 0..1 emissive boost
