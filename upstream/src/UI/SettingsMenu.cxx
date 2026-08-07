@@ -22,7 +22,7 @@ SettingsMenu::SettingsMenu()
     quitYesX(0), quitYesY(0), quitYesW(140), quitYesH(40),
     quitNoX(0), quitNoY(0), quitNoW(140), quitNoH(40),
     editSlider(-1), editLen(0), editBlink(0.f),
-    master(0.9f), music(0.45f), sfx(0.7f), menuPulseSens(0.4f), outline(0.15f),
+    master(0.9f), music(0.60f), sfx(0.7f), menuPulseSens(0.4f), outline(0.15f),
     // White = red, Black = purple (project palette / multiplayer readability)
     outWhiteR(0.95f), outWhiteG(0.12f), outWhiteB(0.12f),
     outBlackR(0.62f), outBlackG(0.18f), outBlackB(0.92f),
