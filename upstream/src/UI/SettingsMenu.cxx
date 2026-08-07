@@ -22,7 +22,8 @@ SettingsMenu::SettingsMenu()
     quitYesX(0), quitYesY(0), quitYesW(140), quitYesH(40),
     quitNoX(0), quitNoY(0), quitNoW(140), quitNoH(40),
     editSlider(-1), editLen(0), editBlink(0.f),
-    master(0.9f), music(0.60f), sfx(0.7f), menuPulseSens(0.6f), outline(0.15f),
+    master(0.9f), music(0.60f), sfx(0.7f), menuPulseSens(0.6f), menuElectric(true),
+    outline(0.15f),
     // White = red, Black = purple (project palette / multiplayer readability)
     outWhiteR(0.95f), outWhiteG(0.12f), outWhiteB(0.12f),
     outBlackR(0.62f), outBlackG(0.18f), outBlackB(0.92f),
@@ -64,7 +65,7 @@ void SettingsMenu::applyToAudio() {
 }
 
 float SettingsMenu::panelHeightForPage() const {
-  if (page == PAGE_SOUND) return 380.f; // + menu pulse slider
+  if (page == PAGE_SOUND) return 440.f; // volumes + pulse + electric toggle
   // thickness + 6 RGB sliders + action cam + reset colours + back
   if (page == PAGE_VIDEO) return 680.f;
   if (page == PAGE_GAMEPLAY) return 320.f;
@@ -90,6 +91,9 @@ void SettingsMenu::rebuildPage() {
     sliders[sliderCount++] = {"Music volume", &music, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
     sliders[sliderCount++] = {"Sound effects", &sfx, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
     sliders[sliderCount++] = {"Menu pulse sensitivity", &menuPulseSens, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    buttons[buttonCount++] = {
+      menuElectric ? "Menu electric borders: ON" : "Menu electric borders: OFF",
+      0, 0, 0, 0, -5};
     buttons[buttonCount++] = {"< Back", 0, 0, 0, 0, -1};
   } else if (page == PAGE_VIDEO) {
     sliders[sliderCount++] = {"Outline thickness", &outline, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
@@ -669,6 +673,9 @@ bool SettingsMenu::onMouseButton(int button, int action, float mx, float my) {
         // Reset per-side outline colours to red / purple defaults
         outWhiteR = 0.95f; outWhiteG = 0.12f; outWhiteB = 0.12f;
         outBlackR = 0.62f; outBlackG = 0.18f; outBlackB = 0.92f;
+        rebuildPage();
+      } else if (act == -5) {
+        menuElectric = !menuElectric;
         rebuildPage();
       } else if (act < 0) {
         page = PAGE_ROOT;

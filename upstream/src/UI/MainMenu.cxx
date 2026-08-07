@@ -53,6 +53,7 @@ MainMenu::MainMenu()
     musicSensitivity_(0.6f),
     pulseBright_(0.f),
     pulseScale_(1.f),
+    electricBorders_(true),
     effectCount_(0),
     effectRedCount_(0),
     effectPurpleCount_(0),
@@ -438,6 +439,23 @@ void MainMenu::updateMusicPulse(float dt) {
   pulseBright_ = drive;
   // Size: up to 30% larger on hard hits
   pulseScale_ = 1.f + 0.30f * drive;
+}
+
+void MainMenu::drawMenuBorder(float x, float y, float w, float h, float intensity) {
+  if (electricBorders_) {
+    drawElectricBorder(x, y, w, h, intensity);
+    return;
+  }
+  // Solid red frame only (no crackle)
+  float a = 0.80f + 0.15f * intensity;
+  float er = 1.f;
+  float eg = 0.25f + 0.12f * intensity;
+  float eb = 0.30f + 0.10f * intensity;
+  const float thick = 3.5f + 1.0f * intensity;
+  drawRect(x, y, w, thick, er, eg, eb, a);
+  drawRect(x, y + h - thick, w, thick, er, eg, eb, a);
+  drawRect(x, y, thick, h, er, eg, eb, a);
+  drawRect(x + w - thick, y, thick, h, er, eg, eb, a);
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {
@@ -900,8 +918,8 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     glVertex2f(b.x, b.y + b.h);
     glEnd();
   } else {
-    drawElectricBorder(b.x, b.y, b.w, b.h,
-                       (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
+    drawMenuBorder(b.x, b.y, b.w, b.h,
+                   (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
   }
   // Centered label
   const float labelScale = 2.5f;
@@ -989,7 +1007,7 @@ void MainMenu::drawHostDialog() {
   drawRect(0, 0, (float)lastW, (float)lastH, 0.0f, 0.0f, 0.0f, 0.45f);
 
   drawRect(dlgX, dlgY, dlgW, dlgH, 0.09f, 0.05f, 0.13f, 0.98f);
-  drawElectricBorder(dlgX, dlgY, dlgW, dlgH, pulseBright_ * 0.85f);
+  drawMenuBorder(dlgX, dlgY, dlgW, dlgH, pulseBright_ * 0.85f);
 
   drawText(dlgX + 28, dlgY + 24, "Host Online Room", 0.85f, 0.55f, 1.f, 1.8f);
   drawText(dlgX + 28, dlgY + 54, "Choose a name others will see in the list.",
@@ -1028,7 +1046,7 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
   float fb = 0.13f + 0.18f * pulseBright_;
   float fa = 0.86f + 0.10f * pulseBright_;
   drawRect(panelX, panelY, panelW, panelH, fr, fg, fb, fa);
-  drawElectricBorder(panelX, panelY, panelW, panelH, pulseBright_);
+  drawMenuBorder(panelX, panelY, panelW, panelH, pulseBright_);
 
   // Title brightens on the beat
   float tr = 0.85f + 0.15f * pulseBright_;
@@ -1045,7 +1063,7 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
              0.9f, 0.82f, 0.95f, 1.35f);
 
     drawRect(listX, listY, listW, listH, 0.05f, 0.03f, 0.08f, 1.f);
-    drawElectricBorder(listX, listY, listW, listH, pulseBright_ * 0.75f);
+    drawMenuBorder(listX, listY, listW, listH, pulseBright_ * 0.75f);
 
     if (rooms_.empty()) {
       drawText(listX + 12, listY + 20, "No rooms yet — Host Online Room, or Refresh.",
