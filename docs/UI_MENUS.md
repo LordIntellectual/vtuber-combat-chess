@@ -77,14 +77,33 @@ path; if Settings later sits over the same parallax stage, revisit that 0.55 vei
 Implemented in `MainMenu::drawParallaxScene` / `projectMouseToUi`:
 
 1. UI laid out in screen pixels → transparent **FBO**.
-2. **Ortho** composite (same y-down as layout — *not* shader lookAt / `glFrustum` planes):
-   - Far: oversize background, larger pan.
-   - Near: full-screen UI FBO, smaller pan.
+2. **Ortho** composite (same y-down as layout — *not* shader lookAt / `glFrustum` planes), back → front:
+   - **Far:** oversize background, larger pan.
+   - **Mid (effect plane):** simulated particles (see below).
+   - **Near:** full-screen UI FBO, smaller pan.
 3. Hits: `ui = mouse − uiLayerPan` so hover matches the near layer.
 
 Do **not** reintroduce true-3D planes with `getLookAtMatrix` / `getPerspectiveProjMatrix`
 via `glLoadMatrixf` — those matrices are for the shader path and caused off-centre
 framing (menu upper-right, hits still centre).
+
+### Effect plane (particles)
+
+**Role:** Sits **behind the menu UI** and **in front of hero art**. Flat 2D, same ortho.
+
+**Sim (test style — small white rectangles as snowflakes):**
+
+| Force | Behaviour |
+|-------|-----------|
+| Uneven wind | Global wind from stacked sines of `motionT_`, plus spatial / per-particle phase gusts. Particles track toward wind velocity with light drag. |
+| Cursor repel | On mouse move, store screen `cursorX_/Y_`. Each particle within ~110 px is accelerated away; falloff is stronger near the cursor. |
+| Wrap | Leave screen → respawn from an edge. **No** particle–particle collision. |
+
+**Code:** `seedEffectParticles`, `updateEffectLayer`, `drawEffectLayer`, `respawnEffectParticle` in `MainMenu.cxx`. Count: `kMaxEffectParticles` (140). Reseed on `show()`.
+
+**Tuning knobs (in `updateEffectLayer`):** `windBase*`, local gust amplitudes, `repelRadius` / `repelStrength`, `drag`, particle size/alpha in seed/respawn.
+
+**Future:** swap white quads for textured flakes / embers; optional mid-layer pan between art and UI; disable or retune per theme.
 
 ## Related assets
 

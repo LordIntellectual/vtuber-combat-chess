@@ -8,9 +8,11 @@
 
 /**
  * Post-splash main menu with 2.5D parallax (root + multiplayer).
- * UI is laid out in screen pixels, rendered to a transparent FBO, then composited
- * over a slightly oversize far art layer. Both layers use the same y-down ortho;
- * the far layer pans more than the near UI for depth. Mouse hits invert UI pan.
+ * Layers (back → front), same y-down ortho:
+ *   1) Far hero art (oversize, larger pan)
+ *   2) Effect plane — simulated particles (wind + cursor repulsion)
+ *   3) Near UI FBO (smaller pan; hits invert UI pan)
+ * No full-screen darken over hero art (see docs/UI_MENUS.md).
  */
 class MainMenu {
 public:
@@ -98,6 +100,21 @@ private:
   float fovYDeg_;
   float uiLayerPanX_, uiLayerPanY_; // pixel pan applied to UI FBO this frame
 
+  // Effect plane (between art and UI): simple snow-like particles
+  static const int kMaxEffectParticles = 140;
+  struct EffectParticle {
+    float x, y;
+    float vx, vy;
+    float size;
+    float alpha;
+    float seed; // per-particle phase for uneven wind
+  };
+  EffectParticle effectParts_[kMaxEffectParticles];
+  int effectCount_;
+  bool effectSeeded_;
+  float cursorX_, cursorY_;
+  bool cursorKnown_;
+
   float panelX, panelY, panelW, panelH;
   static const int kMaxButtons = 10;
   struct Btn {
@@ -154,8 +171,12 @@ private:
   void destroyFbo();
   void updateParallax(float dt);
   void drawParallaxScene(int screenW, int screenH);
-  /** Map window mouse → layout UI pixels via ray vs menu plane. */
+  /** Map window mouse → layout UI pixels (invert UI layer pan). */
   bool projectMouseToUi(float mx, float my, float& uiX, float& uiY) const;
+  void seedEffectParticles(int w, int h);
+  void updateEffectLayer(float dt, int w, int h);
+  void drawEffectLayer();
+  void respawnEffectParticle(EffectParticle& p, int w, int h, int edge);
 };
 
 #endif
