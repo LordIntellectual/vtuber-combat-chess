@@ -170,10 +170,9 @@ static void openInGameSettings() {
 
 /** Close settings: if still in a match, menu theme → stage music. */
 static void onSettingsClosed() {
-  if (gSettingsFromMenu && gMainMenu) {
-    gMainMenu->show();
+  if (gSettingsFromMenu) {
+    // Main Menu was left visible under Settings (hero stage); just clear flag.
     gSettingsFromMenu = false;
-    // Already on menu music when opened from Main Menu
     return;
   }
   if (gInGame)
@@ -906,8 +905,10 @@ int main(int argc, char** argv) {
         break;
       }
       if (act == MainMenu::ACTION_OPEN_SETTINGS) {
+        // Keep Main Menu visible so hero art + effect particles stay behind
+        // Settings (same idea as Multiplayer sub-page). In-game Esc still
+        // overlays Settings on the live board only.
         gSettingsFromMenu = true;
-        mainMenu.hide();
         settings.openMenu();
         audio.playSfx("sfx_select");
         hud.setEvent("Settings");
