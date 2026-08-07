@@ -42,6 +42,9 @@ public:
 
   bool loadBackground(const std::string& pngPath);
 
+  /** Feed smoothed music levels (0..1) for beat pulse / electric borders. */
+  void setMusicDrive(float level, float bass);
+
   void draw(int screenW, int screenH);
 
   bool onMouseButton(int button, int action, float mx, float my);
@@ -99,6 +102,12 @@ private:
   float bgPlaneZ_;
   float fovYDeg_;
   float uiLayerPanX_, uiLayerPanY_; // pixel pan applied to UI FBO this frame
+
+  // Music-reactive chrome (bass pulse + electric borders)
+  float musicLevel_;
+  float musicBass_;
+  float pulseBright_; // 0..1 emissive boost
+  float pulseScale_;  // 1 = rest size
 
   // Effect plane (between art and UI): red/purple ball-lightning particles
   static const int kMaxEffectParticles = 140;
@@ -171,6 +180,8 @@ private:
   void drawHostDialog();
   void drawQuitConfirm();
   void drawUiContent(int screenW, int screenH);
+  void drawElectricBorder(float x, float y, float w, float h, float intensity);
+  void updateMusicPulse(float dt);
   void ensureFbo(int w, int h);
   void destroyFbo();
   void updateParallax(float dt);

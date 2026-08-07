@@ -49,6 +49,10 @@ MainMenu::MainMenu()
     fovYDeg_(42.f),
     uiLayerPanX_(0.f),
     uiLayerPanY_(0.f),
+    musicLevel_(0.f),
+    musicBass_(0.f),
+    pulseBright_(0.f),
+    pulseScale_(1.f),
     effectCount_(0),
     effectRedCount_(0),
     effectPurpleCount_(0),
@@ -404,6 +408,106 @@ void MainMenu::updateParallax(float dt) {
   // Unused by 2.5D path; kept for future true-3D experiments.
   planeTiltX_ = 0.025f * std::sin(motionT_ * 0.19f + 0.4f);
   planeTiltY_ = 0.030f * std::cos(motionT_ * 0.15f);
+  updateMusicPulse(dt);
+}
+
+void MainMenu::setMusicDrive(float level, float bass) {
+  if (level < 0.f) level = 0.f;
+  if (level > 1.f) level = 1.f;
+  if (bass < 0.f) bass = 0.f;
+  if (bass > 1.f) bass = 1.f;
+  musicLevel_ = level;
+  musicBass_ = bass;
+}
+
+void MainMenu::updateMusicPulse(float dt) {
+  (void)dt;
+  // Combine overall level + bass emphasis for techno kick response
+  float drive = 0.35f * musicLevel_ + 0.75f * musicBass_;
+  if (drive > 1.f) drive = 1.f;
+  // Subtle idle shimmer when silent so chrome still feels alive
+  float idle = 0.08f + 0.04f * std::sin(motionT_ * 2.2f);
+  drive = std::max(drive, idle * 0.35f);
+  pulseBright_ = drive;
+  // Size: up to ~6% larger on hard bass
+  pulseScale_ = 1.f + 0.06f * drive;
+}
+
+void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {
+  // Base red border (emissive with beat)
+  float a = 0.75f + 0.25f * intensity;
+  float er = 1.f;
+  float eg = 0.22f + 0.20f * intensity;
+  float eb = 0.28f + 0.15f * intensity;
+  glDisable(GL_TEXTURE_2D);
+  glLineWidth(1.5f + 1.5f * intensity);
+  glColor4f(er, eg, eb, a);
+  glBegin(GL_LINE_LOOP);
+  glVertex2f(x, y);
+  glVertex2f(x + w, y);
+  glVertex2f(x + w, y + h);
+  glVertex2f(x, y + h);
+  glEnd();
+
+  // Additive crackle / lightning along edges
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+  glLineWidth(1.f);
+  const float t = motionT_;
+  const int segs = 18;
+  auto edgeBolt = [&](float x0, float y0, float x1, float y1, float nx, float ny, int edgeId) {
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= segs; ++i) {
+      float u = (float)i / (float)segs;
+      float px = x0 + (x1 - x0) * u;
+      float py = y0 + (y1 - y0) * u;
+      // Hash-ish flicker so bolts aren't static
+      float phase = t * 18.f + edgeId * 7.3f + u * 31.f + musicBass_ * 9.f;
+      float flick = std::sin(phase) * std::sin(phase * 1.7f + edgeId);
+      float off = 0.f;
+      if (flick > 0.15f) {
+        off = (flick - 0.15f) * (3.5f + 10.f * intensity)
+              * std::sin(phase * 3.3f + u * 20.f);
+      }
+      // Occasional long spike
+      float spike = std::sin(t * 9.f + edgeId * 2.1f + u * 6.f);
+      if (spike > 0.92f)
+        off += (spike - 0.92f) * 80.f * (0.4f + intensity);
+      float aa = (0.35f + 0.65f * intensity) * std::max(0.f, flick);
+      // Mix red → purple along the arc
+      float pr = 1.f;
+      float pg = 0.25f + 0.2f * (1.f - u);
+      float pb = 0.35f + 0.55f * u;
+      glColor4f(pr, pg, pb, aa);
+      glVertex2f(px + nx * off, py + ny * off);
+    }
+    glEnd();
+  };
+
+  edgeBolt(x, y, x + w, y, 0.f, -1.f, 0);         // top
+  edgeBolt(x + w, y, x + w, y + h, 1.f, 0.f, 1); // right
+  edgeBolt(x + w, y + h, x, y + h, 0.f, 1.f, 2); // bottom
+  edgeBolt(x, y + h, x, y, -1.f, 0.f, 3);       // left
+
+  // Corner sparks on hard bass hits
+  if (intensity > 0.45f) {
+    float s = 4.f + 14.f * intensity;
+    glBegin(GL_LINES);
+    glColor4f(1.f, 0.85f, 1.f, 0.4f + 0.5f * intensity);
+    float corners[4][2] = {{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}};
+    for (int c = 0; c < 4; ++c) {
+      float ang = t * 14.f + c * 1.7f;
+      glVertex2f(corners[c][0], corners[c][1]);
+      glVertex2f(corners[c][0] + std::cos(ang) * s, corners[c][1] + std::sin(ang) * s);
+      glVertex2f(corners[c][0], corners[c][1]);
+      glVertex2f(corners[c][0] + std::cos(ang + 2.1f) * s * 0.7f,
+                 corners[c][1] + std::sin(ang + 2.1f) * s * 0.7f);
+    }
+    glEnd();
+  }
+
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glLineWidth(1.f);
+  glColor4f(1.f, 1.f, 1.f, 1.f);
 }
 
 void MainMenu::effectHueRgb(int hue, float& r, float& g, float& b) const {
@@ -770,17 +874,22 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     bg = hover ? 0.32f : 0.20f;
     bb = hover ? 0.22f : 0.14f;
   }
-  drawRect(b.x, b.y, b.w, b.h, br, bg, bb, 0.96f);
-  // Red border (default); Create keeps green cue
-  glColor4f(1.f, 0.28f, 0.30f, hover ? 1.f : 0.80f);
-  if (b.id == ID_HOST_CREATE)
+  // Brighten fill slightly with the beat
+  float boost = 0.08f * pulseBright_;
+  drawRect(b.x, b.y, b.w, b.h, br + boost, bg + boost * 0.5f, bb + boost, 0.96f);
+  // Electric red border; Create keeps green cue
+  if (b.id == ID_HOST_CREATE) {
     glColor4f(0.5f, 1.f, 0.7f, hover ? 1.f : 0.85f);
-  glBegin(GL_LINE_LOOP);
-  glVertex2f(b.x, b.y);
-  glVertex2f(b.x + b.w, b.y);
-  glVertex2f(b.x + b.w, b.y + b.h);
-  glVertex2f(b.x, b.y + b.h);
-  glEnd();
+    glBegin(GL_LINE_LOOP);
+    glVertex2f(b.x, b.y);
+    glVertex2f(b.x + b.w, b.y);
+    glVertex2f(b.x + b.w, b.y + b.h);
+    glVertex2f(b.x, b.y + b.h);
+    glEnd();
+  } else {
+    drawElectricBorder(b.x, b.y, b.w, b.h,
+                       (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
+  }
   drawText(b.x + 14.f, b.y + 12.f, b.label, 0.95f, 0.97f, 1.f, 1.35f);
 }
 
@@ -861,13 +970,7 @@ void MainMenu::drawHostDialog() {
   drawRect(0, 0, (float)lastW, (float)lastH, 0.0f, 0.0f, 0.0f, 0.45f);
 
   drawRect(dlgX, dlgY, dlgW, dlgH, 0.09f, 0.05f, 0.13f, 0.98f);
-  glColor4f(1.f, 0.28f, 0.30f, 0.95f);
-  glBegin(GL_LINE_LOOP);
-  glVertex2f(dlgX, dlgY);
-  glVertex2f(dlgX + dlgW, dlgY);
-  glVertex2f(dlgX + dlgW, dlgY + dlgH);
-  glVertex2f(dlgX, dlgY + dlgH);
-  glEnd();
+  drawElectricBorder(dlgX, dlgY, dlgW, dlgH, pulseBright_ * 0.85f);
 
   drawText(dlgX + 28, dlgY + 24, "Host Online Room", 0.85f, 0.55f, 1.f, 1.8f);
   drawText(dlgX + 28, dlgY + 54, "Choose a name others will see in the list.",
@@ -892,17 +995,27 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  // Semi-transparent purple-tinted panel; red border (project palette)
-  drawRect(panelX, panelY, panelW, panelH, 0.09f, 0.05f, 0.13f, 0.88f);
-  glColor4f(1.f, 0.28f, 0.30f, 0.92f);
-  glBegin(GL_LINE_LOOP);
-  glVertex2f(panelX, panelY);
-  glVertex2f(panelX + panelW, panelY);
-  glVertex2f(panelX + panelW, panelY + panelH);
-  glVertex2f(panelX, panelY + panelH);
-  glEnd();
+  // Beat pulse: scale panel chrome about centre; layout/hits stay unscaled
+  const float cx = panelX + panelW * 0.5f;
+  const float cy = panelY + panelH * 0.5f;
+  glPushMatrix();
+  glTranslatef(cx, cy, 0.f);
+  glScalef(pulseScale_, pulseScale_, 1.f);
+  glTranslatef(-cx, -cy, 0.f);
 
-  drawText(panelX + 24, panelY + 22, "vTuber Combat Chess", 0.85f, 0.55f, 1.f, 2.0f);
+  // Emissive purple fill (brightens with bass)
+  float fr = 0.09f + 0.12f * pulseBright_;
+  float fg = 0.05f + 0.04f * pulseBright_;
+  float fb = 0.13f + 0.18f * pulseBright_;
+  float fa = 0.86f + 0.10f * pulseBright_;
+  drawRect(panelX, panelY, panelW, panelH, fr, fg, fb, fa);
+  drawElectricBorder(panelX, panelY, panelW, panelH, pulseBright_);
+
+  // Title brightens on the beat
+  float tr = 0.85f + 0.15f * pulseBright_;
+  float tg = 0.55f + 0.15f * pulseBright_;
+  float tb = 1.f;
+  drawText(panelX + 24, panelY + 22, "vTuber Combat Chess", tr, tg, tb, 2.0f);
 
   if (page_ == PAGE_ROOT) {
     drawText(panelX + 24, panelY + 56, "Main Menu", 0.9f, 0.82f, 0.95f, 1.4f);
@@ -913,13 +1026,7 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
              0.9f, 0.82f, 0.95f, 1.35f);
 
     drawRect(listX, listY, listW, listH, 0.05f, 0.03f, 0.08f, 1.f);
-    glColor4f(1.f, 0.28f, 0.30f, 0.85f);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f(listX, listY);
-    glVertex2f(listX + listW, listY);
-    glVertex2f(listX + listW, listY + listH);
-    glVertex2f(listX, listY + listH);
-    glEnd();
+    drawElectricBorder(listX, listY, listW, listH, pulseBright_ * 0.75f);
 
     if (rooms_.empty()) {
       drawText(listX + 12, listY + 20, "No rooms yet — Host Online Room, or Refresh.",
@@ -962,6 +1069,8 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
 
   if (quitConfirmOpen_)
     drawQuitConfirm();
+
+  glPopMatrix(); // end beat-scale transform
 }
 
 void MainMenu::draw(int screenW, int screenH) {
