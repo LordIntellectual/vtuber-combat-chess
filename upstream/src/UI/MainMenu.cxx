@@ -438,8 +438,8 @@ void MainMenu::drawParallaxScene(int screenW, int screenH) {
     } else {
       drawRect(0, 0, (float)screenW, (float)screenH, 0.05f, 0.07f, 0.12f, 1.f);
     }
-    // Soft darken so semi-transparent menu panel stays readable.
-    drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.32f);
+    // No full-screen darken on Main Menu — hero art should stay bright.
+    // Settings / dialogs apply their own dim when focus is on the panel.
   }
 
   // Near UI: FBO drawn 1:1 screen size, small pan for depth (hits compensate).
