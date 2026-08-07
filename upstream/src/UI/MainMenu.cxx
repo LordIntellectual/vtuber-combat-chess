@@ -1,9 +1,11 @@
 #include "MainMenu.hxx"
+#include "../utils/utils.hxx"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <iostream>
 
 #include "../../third_party/stb_easy_font.h"
 
@@ -20,6 +22,8 @@ MainMenu::MainMenu()
     focusField(0),
     hostName("Stream Match"),
     blinkT(0.f),
+    bgTex(0),
+    bgLoaded(false),
     panelX(0), panelY(0), panelW(640), panelH(520),
     buttonCount(0),
     popupButtonCount(0),
@@ -30,6 +34,37 @@ MainMenu::MainMenu()
     hnX(0), hnY(0), hnW(0), hnH(0),
     hpX(0), hpY(0), hpW(0), hpH(0) {
   rebuild();
+}
+
+MainMenu::~MainMenu() {
+  if (bgTex) {
+    glDeleteTextures(1, &bgTex);
+    bgTex = 0;
+  }
+}
+
+bool MainMenu::loadBackground(const std::string& pngPath) {
+  try {
+    GLuint tex = loadPNGTexture(pngPath);
+    if (!tex) {
+      std::cerr << "[MainMenu] background load returned 0: " << pngPath << "\n";
+      return false;
+    }
+    if (bgTex) glDeleteTextures(1, &bgTex);
+    bgTex = tex;
+    bgLoaded = true;
+    // Smooth scale for 1280x720 art on any window size
+    glBindTexture(GL_TEXTURE_2D, bgTex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    std::cout << "[MainMenu] background: " << pngPath << "\n";
+    return true;
+  } catch (const std::exception& e) {
+    std::cerr << "[MainMenu] background load failed: " << e.what() << "\n";
+    bgLoaded = false;
+    return false;
+  }
 }
 
 void MainMenu::show() {
@@ -222,6 +257,7 @@ int MainMenu::hitField(float mx, float my) const {
 
 void MainMenu::drawRect(float x, float y, float w, float h,
                         float r, float g, float b, float a) {
+  glDisable(GL_TEXTURE_2D);
   glColor4f(r, g, b, a);
   glBegin(GL_QUADS);
   glVertex2f(x, y);
@@ -229,6 +265,31 @@ void MainMenu::drawRect(float x, float y, float w, float h,
   glVertex2f(x + w, y + h);
   glVertex2f(x, y + h);
   glEnd();
+}
+
+void MainMenu::drawTexturedRect(float x, float y, float w, float h, GLuint tex) {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glColor4f(1.f, 1.f, 1.f, 1.f);
+  glBegin(GL_QUADS);
+  // Image is top-left origin in file; ortho is top-left (y down) — flip V
+  glTexCoord2f(0.f, 1.f); glVertex2f(x, y);
+  glTexCoord2f(1.f, 1.f); glVertex2f(x + w, y);
+  glTexCoord2f(1.f, 0.f); glVertex2f(x + w, y + h);
+  glTexCoord2f(0.f, 0.f); glVertex2f(x, y + h);
+  glEnd();
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
+}
+
+void MainMenu::drawBackground(int screenW, int screenH) {
+  if (bgLoaded && bgTex) {
+    drawTexturedRect(0, 0, (float)screenW, (float)screenH, bgTex);
+    // Soft darken so menu chrome stays readable
+    drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.42f);
+  } else {
+    drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.92f);
+  }
 }
 
 void MainMenu::drawText(float x, float y, const char* text,
@@ -341,8 +402,9 @@ void MainMenu::draw(int screenW, int screenH) {
   glPushMatrix();
   glLoadIdentity();
 
-  drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.72f);
-  drawRect(panelX, panelY, panelW, panelH, 0.05f, 0.07f, 0.12f, 0.97f);
+  drawBackground(screenW, screenH);
+  // Semi-transparent menu panel so art shows through a little
+  drawRect(panelX, panelY, panelW, panelH, 0.05f, 0.07f, 0.12f, 0.88f);
   glColor4f(0.35f, 0.75f, 1.f, 0.9f);
   glBegin(GL_LINE_LOOP);
   glVertex2f(panelX, panelY);

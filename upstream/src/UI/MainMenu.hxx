@@ -28,12 +28,16 @@ public:
   };
 
   MainMenu();
+  ~MainMenu();
 
   void show();
   void hide();
   bool isVisible() const { return visible; }
   Page page() const { return page_; }
   bool hostDialogOpen() const { return hostDialogOpen_; }
+
+  /** Load full-screen menu art (PNG). Safe to call once after GL is ready. */
+  bool loadBackground(const std::string& pngPath);
 
   void draw(int screenW, int screenH);
 
@@ -75,6 +79,8 @@ private:
   float blinkT;
   std::vector<LobbyRoom> rooms_;
   LobbyClient lobby_;
+  GLuint bgTex;
+  bool bgLoaded;
 
   float panelX, panelY, panelW, panelH;
   static const int kMaxButtons = 10;
@@ -113,11 +119,13 @@ private:
   int hitRoom(float mx, float my) const;
   int hitField(float mx, float my) const;
   void drawRect(float x, float y, float w, float h, float r, float g, float b, float a);
+  void drawTexturedRect(float x, float y, float w, float h, GLuint tex);
   void drawText(float x, float y, const char* text, float r, float g, float b, float scale);
   void drawButton(const Btn& b, bool hover);
   void drawField(float x, float y, float w, float h, const std::string& text,
                  bool focused, const char* placeholder);
   void drawHostDialog();
+  void drawBackground(int screenW, int screenH);
 };
 
 #endif

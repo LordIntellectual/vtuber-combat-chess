@@ -40,7 +40,7 @@ The zip already contains:
 - `VTuberCombatChess.exe`
 - `stockfish.exe` (AI)
 - `libpng16.dll` / `z.dll`
-- `share\` (assets / audio / piece sets)
+- `share\` (assets / audio / piece sets / UI art)
 
 **Do not** separate the `.exe` from `share\`, `stockfish.exe`, or the DLLs.
 
@@ -68,10 +68,11 @@ $env:VCPKG_ROOT = "$env:USERPROFILE\vcpkg"
 ## Linux
 
 Use the **`main`** branch and `./install_and_build.sh` / `./run.sh`.
+
 ## Features (pre-alpha)
 
 - Play vs **Stockfish** (or human vs human with AI off)
-- **Network multiplayer (experimental):** host/join over TCP — see [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md)
+- **Network multiplayer (experimental):** online rooms via lobby + relay — see [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md)
 - Capture **destruction physics** (Bullet fragments), sparks / neon trails
 - Action camera on captures; checkmate / forfeit victory screens
 - Themes: Cyber Neon Lounge, Bioluminescent Jungle, Starship Over a Star
@@ -80,17 +81,17 @@ Use the **`main`** branch and `./install_and_build.sh` / `./run.sh`.
 
 ### Main Menu & multiplayer (experimental)
 
-After the pre-alpha splash you get a **Main Menu**:
+After the pre-alpha splash you get a **Main Menu** (with title art background):
 
 | Option | Effect |
 |--------|--------|
 | **Single Player** | Offline game (Stockfish AI / local hotseat with **A**) |
-| **Multiplayer** | Host a game or join via `HOST:PORT` |
+| **Multiplayer** | Online room list — host a named room or join (optional password) |
 | **Settings** | Sound / Video / Gameplay (same menu as in-game **S**) |
 
 **Esc** while playing returns to the Main Menu (does not quit). Quit from the menu **Quit** button (or Esc on the root menu).
 
-Multiplayer is host-authoritative TCP (protocol **VCC1**), default port **7777**. Host = White, guest = Black; AI is forced off. Optional CLI still works: `--host [PORT]`, `--join HOST:PORT`. Full design: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
+Online multiplayer uses a lobby + relay so players do not exchange IPs. Optional CLI: `--host [PORT]`, `--join HOST:PORT`. Full design: [docs/MULTIPLAYER_DESIGN.md](docs/MULTIPLAYER_DESIGN.md).
 
 ## Controls (summary)
 
@@ -105,7 +106,7 @@ Multiplayer is host-authoritative TCP (protocol **VCC1**), default port **7777**
 | **S** | Settings |
 | **P** | Cycle piece set |
 | **H** | Toggle HUD |
-| **Esc** | Quit |
+| **Esc** | Back / Main Menu (in-game) |
 | **RMB drag** | Orbit camera |
 | **LMB** | Select / move |
 
