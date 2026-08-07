@@ -363,11 +363,11 @@ void PieceEditor::draw3DPreview(std::map<int, ShaderProgram*>* programs,
     border->setViewMatrix(&view);
     border->setProjectionMatrix(&proj);
     border->setFloat("outlineFactor", outlineFactor);
-    // Preview: white-side red, black-side blue (match game defaults)
+    // Preview: white-side red, black-side purple (match game defaults)
     if (whiteSide)
       border->setVector4f("outlineColor", 0.95f, 0.12f, 0.12f, 1.f);
     else
-      border->setVector4f("outlineColor", 0.15f, 0.40f, 0.95f, 1.f);
+      border->setVector4f("outlineColor", 0.62f, 0.18f, 0.92f, 1.f);
     border->setMoveMatrix(&mm);
     auto nm = inverse(&mm);
     nm = transpose(&nm);

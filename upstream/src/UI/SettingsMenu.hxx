@@ -54,7 +54,7 @@ public:
   float outlineWhiteR() const { return outWhiteR; }
   float outlineWhiteG() const { return outWhiteG; }
   float outlineWhiteB() const { return outWhiteB; }
-  /** Black (negative) side outline RGB in 0..1. Defaults blue. */
+  /** Black (negative) side outline RGB in 0..1. Defaults purple. */
   float outlineBlackR() const { return outBlackR; }
   float outlineBlackG() const { return outBlackG; }
   float outlineBlackB() const { return outBlackB; }

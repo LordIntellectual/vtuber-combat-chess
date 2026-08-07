@@ -49,6 +49,8 @@ MainMenu::MainMenu()
     uiLayerPanX_(0.f),
     uiLayerPanY_(0.f),
     effectCount_(0),
+    effectRedCount_(0),
+    effectPurpleCount_(0),
     effectSeeded_(false),
     cursorX_(0.f),
     cursorY_(0.f),
@@ -399,6 +401,37 @@ void MainMenu::updateParallax(float dt) {
   planeTiltY_ = 0.030f * std::cos(motionT_ * 0.15f);
 }
 
+void MainMenu::effectHueRgb(int hue, float& r, float& g, float& b) const {
+  if (hue == EFFECT_PURPLE) {
+    r = 0.72f; g = 0.22f; b = 1.f; // team purple
+  } else {
+    r = 1.f; g = 0.18f; b = 0.22f; // team red
+  }
+}
+
+int MainMenu::pickBalancedEffectHue(float salt) const {
+  // More red active → higher chance of purple (and vice versa). Soft bias.
+  const float imbalance = (float)(effectRedCount_ - effectPurpleCount_);
+  const float denom = (float)std::max(effectCount_, 1);
+  float pPurple = 0.5f + 0.55f * (imbalance / denom);
+  if (pPurple < 0.12f) pPurple = 0.12f;
+  if (pPurple > 0.88f) pPurple = 0.88f;
+  // Deterministic sample from time + counts + per-spawn salt
+  float u = std::fmod(motionT_ * 17.13f + salt * 97.1f
+                      + (float)effectRedCount_ * 0.37f
+                      + (float)effectPurpleCount_ * 0.91f, 1.f);
+  if (u < 0.f) u += 1.f;
+  return (u < pPurple) ? EFFECT_PURPLE : EFFECT_RED;
+}
+
+void MainMenu::assignEffectHue(EffectParticle& p, int hue) {
+  if (p.hue == EFFECT_RED) --effectRedCount_;
+  else if (p.hue == EFFECT_PURPLE) --effectPurpleCount_;
+  p.hue = (hue == EFFECT_PURPLE) ? EFFECT_PURPLE : EFFECT_RED;
+  if (p.hue == EFFECT_PURPLE) ++effectPurpleCount_;
+  else ++effectRedCount_;
+}
+
 void MainMenu::respawnEffectParticle(EffectParticle& p, int w, int h, int exitEdge) {
   // Destroy particle that left the plane and birth a new one near the
   // opposite edge, moving inward — continuous flow, no edge pile-up.
@@ -407,10 +440,13 @@ void MainMenu::respawnEffectParticle(EffectParticle& p, int w, int h, int exitEd
   p.seed = std::fmod(p.seed * 1.6180339887f + 0.371f + motionT_ * 0.07f, 1.f);
   if (p.seed < 0.f) p.seed += 1.f;
 
-  p.size = 1.5f + std::fmod(p.seed * 17.3f, 3.5f);
-  p.alpha = 0.45f + std::fmod(p.seed * 9.1f, 0.45f);
+  // Colour: rebalance red vs purple (destroyed hue may flip on birth).
+  assignEffectHue(p, pickBalancedEffectHue(p.seed));
 
-  // Spawn just inside the opposite edge so the flake is immediately visible
+  p.size = 2.8f + std::fmod(p.seed * 17.3f, 3.2f); // ball core radius
+  p.alpha = 0.75f + std::fmod(p.seed * 9.1f, 0.25f);
+
+  // Spawn just inside the opposite edge so the orb is immediately visible
   // and already travelling into the plane (not stuck outside the pad zone).
   const float inset = 4.f + p.size;
   const float speedIn = 40.f + std::fmod(p.seed * 41.f, 50.f);
@@ -450,17 +486,22 @@ void MainMenu::seedEffectParticles(int w, int h) {
   if (w < 1) w = 1280;
   if (h < 1) h = 720;
   effectCount_ = kMaxEffectParticles;
+  effectRedCount_ = 0;
+  effectPurpleCount_ = 0;
   for (int i = 0; i < effectCount_; ++i) {
     EffectParticle& p = effectParts_[i];
     // Deterministic pseudo-random from index (no rand() dependency).
     p.seed = std::fmod(0.173f * (float)(i + 1) + 0.6180339887f * (float)i, 1.f);
     if (p.seed < 0.f) p.seed += 1.f;
-    p.size = 1.5f + std::fmod(p.seed * 17.3f, 3.5f);
-    p.alpha = 0.45f + std::fmod(p.seed * 9.1f, 0.45f);
+    p.size = 2.8f + std::fmod(p.seed * 17.3f, 3.2f);
+    p.alpha = 0.75f + std::fmod(p.seed * 9.1f, 0.25f);
     p.x = std::fmod(p.seed * 1301.f + (float)i * 17.f, (float)w);
     p.y = std::fmod(p.seed * 907.f + (float)i * 29.f, (float)h);
     p.vx = 15.f + std::fmod(p.seed * 53.f, 50.f);
     p.vy = 12.f + std::fmod(p.seed * 37.f, 35.f);
+    // Start ~even: alternate, then let balance logic maintain it.
+    p.hue = -1; // assignEffectHue treats unknown as no decrement
+    assignEffectHue(p, (i & 1) ? EFFECT_PURPLE : EFFECT_RED);
   }
   effectSeeded_ = true;
 }
@@ -541,18 +582,84 @@ void MainMenu::updateEffectLayer(float dt, int w, int h) {
 void MainMenu::drawEffectLayer() {
   if (effectCount_ <= 0) return;
   glDisable(GL_TEXTURE_2D);
-  glBegin(GL_QUADS);
+  glEnable(GL_BLEND);
+
+  auto disc = [](float cx, float cy, float rad, float r, float g, float b, float a,
+                 int segs) {
+    glBegin(GL_TRIANGLE_FAN);
+    glColor4f(r, g, b, a);
+    glVertex2f(cx, cy);
+    for (int s = 0; s <= segs; ++s) {
+      float ang = (float)s / (float)segs * 2.f * (float)M_PI;
+      // Soft falloff: rim more transparent
+      float t = (float)s / (float)segs;
+      (void)t;
+      glColor4f(r, g, b, a * 0.15f);
+      glVertex2f(cx + std::cos(ang) * rad, cy + std::sin(ang) * rad);
+    }
+    glEnd();
+  };
+
+  // Additive glow pass — light bloom / emission
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE);
   for (int i = 0; i < effectCount_; ++i) {
     const EffectParticle& p = effectParts_[i];
-    const float s = p.size;
-    glColor4f(1.f, 1.f, 1.f, p.alpha);
-    glVertex2f(p.x - s, p.y - s);
-    glVertex2f(p.x + s, p.y - s);
-    glVertex2f(p.x + s, p.y + s);
-    glVertex2f(p.x - s, p.y + s);
+    float hr, hg, hb;
+    effectHueRgb(p.hue, hr, hg, hb);
+    // Outer halo
+    disc(p.x, p.y, p.size * 3.6f, hr, hg, hb, 0.18f * p.alpha, 14);
+    // Mid glow
+    disc(p.x, p.y, p.size * 2.2f, hr, hg, hb, 0.35f * p.alpha, 12);
+  }
+
+  // Crackle bolts (additive thin lines)
+  glLineWidth(1.2f);
+  glBegin(GL_LINES);
+  for (int i = 0; i < effectCount_; ++i) {
+    const EffectParticle& p = effectParts_[i];
+    float hr, hg, hb;
+    effectHueRgb(p.hue, hr, hg, hb);
+    // 3 candidate sparks; flicker via time + seed
+    for (int b = 0; b < 3; ++b) {
+      float phase = motionT_ * 22.f + p.seed * 40.f + (float)b * 2.7f + (float)i * 0.13f;
+      float flicker = std::sin(phase) * std::sin(phase * 1.7f + p.seed);
+      if (flicker < 0.25f) continue; // mostly off — crackle, not solid rays
+      float ang = p.seed * 6.28f + (float)b * 2.094f
+                 + 0.55f * std::sin(phase * 3.1f);
+      float len = p.size * (1.8f + 1.4f * flicker + std::fmod(p.seed * 3.f + b, 1.2f));
+      // Jagged mid-point
+      float mx = p.x + std::cos(ang) * len * 0.45f
+                 + std::sin(phase * 5.f) * p.size * 0.35f;
+      float my = p.y + std::sin(ang) * len * 0.45f
+                 + std::cos(phase * 4.3f) * p.size * 0.35f;
+      float ex = p.x + std::cos(ang) * len;
+      float ey = p.y + std::sin(ang) * len;
+      float aBolt = 0.55f * p.alpha * flicker;
+      glColor4f(1.f, 0.92f, 1.f, aBolt); // hot white core of arc
+      glVertex2f(p.x, p.y);
+      glVertex2f(mx, my);
+      glColor4f(hr, hg, hb, aBolt * 0.85f);
+      glVertex2f(mx, my);
+      glVertex2f(ex, ey);
+    }
   }
   glEnd();
+
+  // Solid cores (normal alpha blend for readable orbs)
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  for (int i = 0; i < effectCount_; ++i) {
+    const EffectParticle& p = effectParts_[i];
+    float hr, hg, hb;
+    effectHueRgb(p.hue, hr, hg, hb);
+    // Soft colour body
+    disc(p.x, p.y, p.size * 1.15f, hr, hg, hb, 0.85f * p.alpha, 12);
+    // Hot centre
+    disc(p.x, p.y, p.size * 0.45f, 1.f, 0.95f, 1.f, 0.95f * p.alpha, 10);
+  }
+
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glColor4f(1.f, 1.f, 1.f, 1.f);
+  glLineWidth(1.f);
 }
 
 void MainMenu::drawParallaxScene(int screenW, int screenH) {
