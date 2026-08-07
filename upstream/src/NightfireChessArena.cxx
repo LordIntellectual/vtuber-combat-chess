@@ -1,4 +1,6 @@
-#include "gl_compat.hxx"
+#define GL_GLEXT_PROTOTYPES
+
+#include <GLFW/glfw3.h>
 #include <exception>
 #include <map>
 #include <iostream>
@@ -82,12 +84,9 @@ bool gSettingsFromMenu = false;
 
 static std::string ncaShareRoot() {
   std::string p = get_share_path(); // .../share/toonchess/
-  for (size_t i = 0; i < p.size(); ++i)
-    if (p[i] == '\\') p[i] = '/';
   auto pos = p.rfind("toonchess");
   if (pos != std::string::npos) p.replace(pos, 9, "nca");
   else p += "../nca/";
-  if (!p.empty() && p.back() != '/') p.push_back('/');
   return p;
 }
 
@@ -591,20 +590,13 @@ int main(int argc, char** argv) {
 
   if (!glfwInit()) return 1;
   glfwWindowHint(GLFW_SAMPLES, ANTIALIASING_HIGH);
-  // Compatibility profile required for fixed-function HUD (stb_easy_font)
+  // Request compatibility profile for fixed-function HUD
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
   GLFWwindow* window = glfwCreateWindow(width, height, "vTuber Combat Chess", NULL, NULL);
   if (!window) { glfwTerminate(); return 1; }
   glfwMakeContextCurrent(window);
-  if (!vccInitGL()) {
-    std::cerr << "[GL] Failed to load OpenGL entry points (GLAD)\n";
-    glfwDestroyWindow(window);
-    glfwTerminate();
-    return 1;
-  }
   glEnable(GL_MULTISAMPLE);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
@@ -1341,7 +1333,6 @@ void celShadingRender(
   blackBorderProgram->setFloat("outlineFactor", outlineFactor);
 
   auto setOutlineSide = [&](int pieceSigned) {
-    // White / user (positive) vs black / AI (negative). Board uses black.
     if (pieceSigned > 0)
       blackBorderProgram->setVector4f(
         "outlineColor", outlineWhiteR, outlineWhiteG, outlineWhiteB, 1.f);
@@ -1377,7 +1368,7 @@ void celShadingRender(
       movementMatrix = getIdentityMatrix();
       movementMatrix = translate(&movementMatrix, translation);
       blackBorderProgram->setMoveMatrix(&movementMatrix);
-      setOutlineSide(0); // board: black outline
+      setOutlineSide(0);
       pieces->at(BOARDCELL)->draw();
 
       if (piece != EMPTY) {

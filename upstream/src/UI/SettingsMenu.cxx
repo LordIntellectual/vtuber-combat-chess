@@ -1,4 +1,5 @@
-#include "../gl_compat.hxx"
+#define GL_GLEXT_PROTOTYPES
+#include <GLFW/glfw3.h>
 #include "SettingsMenu.hxx"
 #include "PieceEditor.hxx"
 #include "../Audio/AudioEngine.hxx"
@@ -23,7 +24,6 @@ SettingsMenu::SettingsMenu()
     quitNoX(0), quitNoY(0), quitNoW(140), quitNoH(40),
     editSlider(-1), editLen(0), editBlink(0.f),
     master(0.9f), music(0.45f), sfx(0.7f), outline(0.15f),
-    // White = red, Black = blue (team readability for multiplayer)
     outWhiteR(0.95f), outWhiteG(0.12f), outWhiteB(0.12f),
     outBlackR(0.15f), outBlackG(0.40f), outBlackB(0.95f),
     actionCamera(true),
@@ -65,7 +65,6 @@ void SettingsMenu::applyToAudio() {
 
 float SettingsMenu::panelHeightForPage() const {
   if (page == PAGE_SOUND) return 320.f;
-  // thickness + 6 RGB sliders + action cam + reset colours + back
   if (page == PAGE_VIDEO) return 680.f;
   if (page == PAGE_GAMEPLAY) return 320.f;
   if (page == PAGE_ROOT) return 420.f; // + Return / Quit
@@ -663,7 +662,6 @@ bool SettingsMenu::onMouseButton(int button, int action, float mx, float my) {
         suggestedMoves = !suggestedMoves;
         rebuildPage();
       } else if (act == -4) {
-        // Reset per-side outline colours to red / blue defaults
         outWhiteR = 0.95f; outWhiteG = 0.12f; outWhiteB = 0.12f;
         outBlackR = 0.15f; outBlackG = 0.40f; outBlackB = 0.95f;
         rebuildPage();

@@ -1,4 +1,5 @@
-#include "../gl_compat.hxx"
+#define GL_GLEXT_PROTOTYPES
+#include <GLFW/glfw3.h>
 #include "PieceEditor.hxx"
 #include "../constants.hxx"
 #include "../utils/math.hxx"
@@ -363,7 +364,6 @@ void PieceEditor::draw3DPreview(std::map<int, ShaderProgram*>* programs,
     border->setViewMatrix(&view);
     border->setProjectionMatrix(&proj);
     border->setFloat("outlineFactor", outlineFactor);
-    // Preview: white-side red, black-side blue (match game defaults)
     if (whiteSide)
       border->setVector4f("outlineColor", 0.95f, 0.12f, 0.12f, 1.f);
     else
@@ -423,7 +423,7 @@ void PieceEditor::draw3DPreview(std::map<int, ShaderProgram*>* programs,
     drawMeshCel(cell, mm, theme.boardLight);
   }
 
-  // Piece with edit transform (white team) — red outline by default
+  // Piece with edit transform (white team) — red outline
   if (piece) {
     auto mm = PieceTransformStore::buildPieceMatrix(
       +ptype, 0.f, 0.f, 0.f, 2.0f, edit);

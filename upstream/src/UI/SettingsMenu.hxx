@@ -117,7 +117,6 @@ private:
   float music;
   float sfx;
   float outline; // 0..1 thickness control
-  // Per-side outline colours (0..1 RGB)
   float outWhiteR, outWhiteG, outWhiteB;
   float outBlackR, outBlackG, outBlackB;
   bool actionCamera;   // capture close-up cam (default on)
