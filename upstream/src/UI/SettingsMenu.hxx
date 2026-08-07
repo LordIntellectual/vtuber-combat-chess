@@ -78,7 +78,7 @@ public:
 
   /**
    * Main Menu beat-pulse strength (0..1). How hard the panel reacts to
-   * music energy (full-band). Default ~0.4. Sound settings.
+   * music energy (full-band). Default ~0.6. Sound settings.
    */
   float menuPulseSensitivity() const { return menuPulseSens; }
   void setMenuPulseSensitivity(float v) {
