@@ -49,6 +49,7 @@ MainMenu::MainMenu()
     fovYDeg_(42.f),
     uiLayerPanX_(0.f),
     uiLayerPanY_(0.f),
+    musicLevel_(0.f),
     musicBass_(0.f),
     musicSensitivity_(0.4f),
     pulseBright_(0.f),
@@ -411,42 +412,48 @@ void MainMenu::updateParallax(float dt) {
   updateMusicPulse(dt);
 }
 
-void MainMenu::setMusicDrive(float bass, float sensitivity, float level) {
-  (void)level; // broadband ignored — pulse is bass-only
+void MainMenu::setMusicDrive(float level, float sensitivity, float bass) {
+  if (level < 0.f) level = 0.f;
+  if (level > 1.f) level = 1.f;
   if (bass < 0.f) bass = 0.f;
   if (bass > 1.f) bass = 1.f;
   if (sensitivity < 0.f) sensitivity = 0.f;
   if (sensitivity > 1.f) sensitivity = 1.f;
+  musicLevel_ = level;
   musicBass_ = bass;
   musicSensitivity_ = sensitivity;
 }
 
 void MainMenu::updateMusicPulse(float dt) {
   (void)dt;
-  // Bass-only drive (kicks / sub). Sensitivity 0 → almost still, 1 → strong.
-  // Map 0..1 → gain so default 0.4 is moderate.
+  // Full-band music envelope (all instruments). Sensitivity 0 → calm, 1 → strong.
   const float gain = 0.15f + musicSensitivity_ * 1.35f; // 0.15..1.5
-  float drive = musicBass_ * gain;
+  float drive = musicLevel_ * gain;
   // Soft compress so long loud passages don't peg the effect
   drive = drive / (1.f + drive * 1.1f);
   if (drive > 1.f) drive = 1.f;
-  // Very subtle idle when quiet (chrome still alive, not competing with kicks)
+  // Very subtle idle when quiet (chrome still alive)
   float idle = 0.04f + 0.02f * std::sin(motionT_ * 2.2f);
   if (drive < idle * 0.5f)
     drive = idle * 0.5f;
   pulseBright_ = drive;
-  // Size: up to 10% larger on hard kicks
-  pulseScale_ = 1.f + 0.10f * drive;
+  // Size: up to 20% larger on hard hits
+  pulseScale_ = 1.f + 0.20f * drive;
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {
-  // Base red border (emissive with beat)
+  // Base red border (emissive with beat) — slightly thicker solid frame
   float a = 0.75f + 0.25f * intensity;
   float er = 1.f;
   float eg = 0.22f + 0.20f * intensity;
   float eb = 0.28f + 0.15f * intensity;
   glDisable(GL_TEXTURE_2D);
-  glLineWidth(1.5f + 1.5f * intensity);
+  const float thick = 2.5f + 1.5f * intensity; // solid edge thickness (px)
+  drawRect(x, y, w, thick, er, eg, eb, a);                    // top
+  drawRect(x, y + h - thick, w, thick, er, eg, eb, a);        // bottom
+  drawRect(x, y, thick, h, er, eg, eb, a);                    // left
+  drawRect(x + w - thick, y, thick, h, er, eg, eb, a);        // right
+  glLineWidth(2.0f + 1.5f * intensity);
   glColor4f(er, eg, eb, a);
   glBegin(GL_LINE_LOOP);
   glVertex2f(x, y);
@@ -457,7 +464,7 @@ void MainMenu::drawElectricBorder(float x, float y, float w, float h, float inte
 
   // Additive crackle / lightning along edges
   glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glLineWidth(1.f);
+  glLineWidth(1.5f);
   const float t = motionT_;
   const int segs = 18;
   auto edgeBolt = [&](float x0, float y0, float x1, float y1, float nx, float ny, int edgeId) {
@@ -467,7 +474,8 @@ void MainMenu::drawElectricBorder(float x, float y, float w, float h, float inte
       float px = x0 + (x1 - x0) * u;
       float py = y0 + (y1 - y0) * u;
       // Hash-ish flicker so bolts aren't static
-      float phase = t * 18.f + edgeId * 7.3f + u * 31.f + musicBass_ * 9.f;
+      float phase = t * 18.f + edgeId * 7.3f + u * 31.f
+                    + musicLevel_ * 9.f + musicBass_ * 4.f;
       float flick = std::sin(phase) * std::sin(phase * 1.7f + edgeId);
       float off = 0.f;
       if (flick > 0.15f) {
@@ -896,7 +904,13 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     drawElectricBorder(b.x, b.y, b.w, b.h,
                        (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
   }
-  drawText(b.x + 14.f, b.y + 12.f, b.label, 0.95f, 0.97f, 1.f, 1.35f);
+  // Centered label, slightly larger than before
+  const float labelScale = 1.55f;
+  float tw = stb_easy_font_width((char*)b.label) * labelScale;
+  float th = 8.f * labelScale; // stb_easy_font baseline height ~8
+  float tx = b.x + (b.w - tw) * 0.5f;
+  float ty = b.y + (b.h - th) * 0.5f;
+  drawText(tx, ty, b.label, 0.95f, 0.97f, 1.f, labelScale);
 }
 
 void MainMenu::drawField(float x, float y, float w, float h, const std::string& text,

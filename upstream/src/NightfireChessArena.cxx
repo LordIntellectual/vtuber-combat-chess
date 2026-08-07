@@ -1325,8 +1325,9 @@ int main(int argc, char** argv) {
       }
     }
 
-    // Bass-only reactive menu chrome (pulse + electric borders)
-    mainMenu.setMusicDrive(audio.musicBassLevel(), settings.menuPulseSensitivity());
+    // Full-band reactive menu chrome (pulse + electric borders)
+    mainMenu.setMusicDrive(audio.musicLevel(), settings.menuPulseSensitivity(),
+                           audio.musicBassLevel());
     mainMenu.draw(width, height);
     settings.draw(width, height);
     if (pieceEditor.isOpen())
