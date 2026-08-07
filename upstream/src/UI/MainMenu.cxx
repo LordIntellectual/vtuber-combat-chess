@@ -49,8 +49,8 @@ MainMenu::MainMenu()
     fovYDeg_(42.f),
     uiLayerPanX_(0.f),
     uiLayerPanY_(0.f),
-    musicLevel_(0.f),
     musicBass_(0.f),
+    musicSensitivity_(0.4f),
     pulseBright_(0.f),
     pulseScale_(1.f),
     effectCount_(0),
@@ -411,26 +411,32 @@ void MainMenu::updateParallax(float dt) {
   updateMusicPulse(dt);
 }
 
-void MainMenu::setMusicDrive(float level, float bass) {
-  if (level < 0.f) level = 0.f;
-  if (level > 1.f) level = 1.f;
+void MainMenu::setMusicDrive(float bass, float sensitivity, float level) {
+  (void)level; // broadband ignored — pulse is bass-only
   if (bass < 0.f) bass = 0.f;
   if (bass > 1.f) bass = 1.f;
-  musicLevel_ = level;
+  if (sensitivity < 0.f) sensitivity = 0.f;
+  if (sensitivity > 1.f) sensitivity = 1.f;
   musicBass_ = bass;
+  musicSensitivity_ = sensitivity;
 }
 
 void MainMenu::updateMusicPulse(float dt) {
   (void)dt;
-  // Combine overall level + bass emphasis for techno kick response
-  float drive = 0.35f * musicLevel_ + 0.75f * musicBass_;
+  // Bass-only drive (kicks / sub). Sensitivity 0 → almost still, 1 → strong.
+  // Map 0..1 → gain so default 0.4 is moderate.
+  const float gain = 0.15f + musicSensitivity_ * 1.35f; // 0.15..1.5
+  float drive = musicBass_ * gain;
+  // Soft compress so long loud passages don't peg the effect
+  drive = drive / (1.f + drive * 1.1f);
   if (drive > 1.f) drive = 1.f;
-  // Subtle idle shimmer when silent so chrome still feels alive
-  float idle = 0.08f + 0.04f * std::sin(motionT_ * 2.2f);
-  drive = std::max(drive, idle * 0.35f);
+  // Very subtle idle when quiet (chrome still alive, not competing with kicks)
+  float idle = 0.04f + 0.02f * std::sin(motionT_ * 2.2f);
+  if (drive < idle * 0.5f)
+    drive = idle * 0.5f;
   pulseBright_ = drive;
-  // Size: up to ~6% larger on hard bass
-  pulseScale_ = 1.f + 0.06f * drive;
+  // Size: up to ~4.5% larger on hard kicks (was 6% and too busy)
+  pulseScale_ = 1.f + 0.045f * drive;
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {

@@ -45,7 +45,11 @@ public:
   float musicVolume() const { return musicVol; }
   float sfxVolume() const { return sfxVol; }
 
-  /** Smoothed 0..1 levels from the currently playing music (for UI pulse / FX). */
+  /**
+   * Smoothed 0..1 levels from the currently playing music (for UI pulse / FX).
+   * musicBassLevel() is low-pass only (~kick / sub); use that for menu pulse.
+   * musicLevel() is broadband RMS (legacy / diagnostics).
+   */
   float musicLevel() const { return levelSmooth; }
   float musicBassLevel() const { return bassSmooth; }
 
@@ -70,6 +74,9 @@ private:
   void* analysisDecoder; // ma_decoder* — PCM peek for reactive UI
   float levelSmooth;
   float bassSmooth;
+  float analysisLp1_; // stateful multi-pole low-pass (bass isolation)
+  float analysisLp2_;
+  float analysisLp3_;
   std::map<std::string, std::string> sfxPaths;
   std::vector<ma_sound*> activeSfx;
 

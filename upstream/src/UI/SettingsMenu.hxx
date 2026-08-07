@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
 
 class AudioEngine;
 class PieceEditor;
@@ -75,6 +76,15 @@ public:
   /** Physics multiplier: 0..2 (1.0 at 50% slider). */
   float explosionForceScale() const { return explosionForceUI * 2.f; }
 
+  /**
+   * Main Menu beat-pulse strength (0..1). How hard the panel reacts to
+   * low-frequency music energy. Default ~0.4. Sound settings.
+   */
+  float menuPulseSensitivity() const { return menuPulseSens; }
+  void setMenuPulseSensitivity(float v) {
+    menuPulseSens = std::max(0.f, std::min(1.f, v));
+  }
+
   bool pieceEditorOpen() const;
 
 private:
@@ -116,6 +126,7 @@ private:
   float master;
   float music;
   float sfx;
+  float menuPulseSens; // 0..1 Main Menu bass-pulse strength
   float outline; // 0..1 thickness control
   float outWhiteR, outWhiteG, outWhiteB;
   float outBlackR, outBlackG, outBlackB;
