@@ -1,6 +1,4 @@
-#define GL_GLEXT_PROTOTYPES
-
-#include <GLFW/glfw3.h>
+#include "gl_compat.hxx"
 #include <exception>
 #include <map>
 #include <iostream>
@@ -84,9 +82,12 @@ bool gSettingsFromMenu = false;
 
 static std::string ncaShareRoot() {
   std::string p = get_share_path(); // .../share/toonchess/
+  for (size_t i = 0; i < p.size(); ++i)
+    if (p[i] == '\\') p[i] = '/';
   auto pos = p.rfind("toonchess");
   if (pos != std::string::npos) p.replace(pos, 9, "nca");
   else p += "../nca/";
+  if (!p.empty() && p.back() != '/') p.push_back('/');
   return p;
 }
 
@@ -435,7 +436,9 @@ void celShadingRender(
   const Vector3f* neonLightPos = nullptr,
   const Vector3f* neonLightColor = nullptr,
   const float* neonLightIntensity = nullptr,
-  int neonLightCount = 0);
+  int neonLightCount = 0,
+  float outlineWhiteR = 0.95f, float outlineWhiteG = 0.12f, float outlineWhiteB = 0.12f,
+  float outlineBlackR = 0.15f, float outlineBlackG = 0.40f, float outlineBlackB = 0.95f);
 
 static void printNetUsage() {
   std::cout << "Multiplayer (experimental):\n"
@@ -588,13 +591,20 @@ int main(int argc, char** argv) {
 
   if (!glfwInit()) return 1;
   glfwWindowHint(GLFW_SAMPLES, ANTIALIASING_HIGH);
-  // Request compatibility profile for fixed-function HUD
+  // Compatibility profile required for fixed-function HUD (stb_easy_font)
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 
   GLFWwindow* window = glfwCreateWindow(width, height, "vTuber Combat Chess", NULL, NULL);
   if (!window) { glfwTerminate(); return 1; }
   glfwMakeContextCurrent(window);
+  if (!vccInitGL()) {
+    std::cerr << "[GL] Failed to load OpenGL entry points (GLAD)\n";
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 1;
+  }
   glEnable(GL_MULTISAMPLE);
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
@@ -1221,7 +1231,9 @@ int main(int argc, char** argv) {
     celShadingRender(
       game, physicsWorld, &pieces, &programs, shadowMapping, camera, &light,
       elapsedTime, th, shake, hover, outlineF, &transforms, &activeSet,
-      neonPos, neonCol, neonInt, neonCount);
+      neonPos, neonCol, neonInt, neonCount,
+      settings.outlineWhiteR(), settings.outlineWhiteG(), settings.outlineWhiteB(),
+      settings.outlineBlackR(), settings.outlineBlackG(), settings.outlineBlackB());
 
     // Restore suggestion coords so next AI move still has data when re-enabled
     game->suggestedUserMoveStartPosition = sugSaveS;
@@ -1289,7 +1301,13 @@ void celShadingRender(
     const Vector3f* neonLightPos,
     const Vector3f* neonLightColor,
     const float* neonLightIntensity,
-    int neonLightCount) {
+    int neonLightCount,
+    float outlineWhiteR,
+    float outlineWhiteG,
+    float outlineWhiteB,
+    float outlineBlackR,
+    float outlineBlackG,
+    float outlineBlackB) {
   std::vector<GLfloat> movementMatrix;
   Vector3f translation;
   Vector3f rotation = {0, 0, 1};
@@ -1322,6 +1340,18 @@ void celShadingRender(
   // Normal-based outline thickness (Video settings). 0 disables silhouette shell.
   blackBorderProgram->setFloat("outlineFactor", outlineFactor);
 
+  auto setOutlineSide = [&](int pieceSigned) {
+    // White / user (positive) vs black / AI (negative). Board uses black.
+    if (pieceSigned > 0)
+      blackBorderProgram->setVector4f(
+        "outlineColor", outlineWhiteR, outlineWhiteG, outlineWhiteB, 1.f);
+    else if (pieceSigned < 0)
+      blackBorderProgram->setVector4f(
+        "outlineColor", outlineBlackR, outlineBlackG, outlineBlackB, 1.f);
+    else
+      blackBorderProgram->setVector4f("outlineColor", 0.f, 0.f, 0.f, 1.f);
+  };
+
   for (unsigned int i = 0; i < physicsWorld->fragmentPool.size(); i++) {
     Fragment* fragment = physicsWorld->fragmentPool.at(i).second;
     movementMatrix = fragment->getMoveMatrix();
@@ -1329,6 +1359,7 @@ void celShadingRender(
     std::vector<GLfloat> normalMatrix = inverse(&movementMatrix);
     normalMatrix = transpose(&normalMatrix);
     blackBorderProgram->setNormalMatrix(&normalMatrix);
+    setOutlineSide(physicsWorld->fragmentPool.at(i).first);
     fragment->mesh->draw();
   }
 
@@ -1346,6 +1377,7 @@ void celShadingRender(
       movementMatrix = getIdentityMatrix();
       movementMatrix = translate(&movementMatrix, translation);
       blackBorderProgram->setMoveMatrix(&movementMatrix);
+      setOutlineSide(0); // board: black outline
       pieces->at(BOARDCELL)->draw();
 
       if (piece != EMPTY) {
@@ -1354,6 +1386,7 @@ void celShadingRender(
           movementMatrix = pieceMatrix(
             piece, translation.x, translation.y, translation.z);
           blackBorderProgram->setMoveMatrix(&movementMatrix);
+          setOutlineSide(piece);
           pieces->at(pk)->draw();
         }
       }
@@ -1370,6 +1403,7 @@ void celShadingRender(
       movementMatrix = pieceMatrix(
         game->movingPiece, translation.x, translation.y, translation.z);
       blackBorderProgram->setMoveMatrix(&movementMatrix);
+      setOutlineSide(game->movingPiece);
       pieces->at(mk)->draw();
     }
   }

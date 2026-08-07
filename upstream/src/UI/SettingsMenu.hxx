@@ -50,6 +50,15 @@ public:
   /** Shader outlineFactor from UI (0 → 0, 1 → max outline). */
   float outlineFactor() const;
 
+  /** White (positive) side outline RGB in 0..1. Defaults red. */
+  float outlineWhiteR() const { return outWhiteR; }
+  float outlineWhiteG() const { return outWhiteG; }
+  float outlineWhiteB() const { return outWhiteB; }
+  /** Black (negative) side outline RGB in 0..1. Defaults blue. */
+  float outlineBlackR() const { return outBlackR; }
+  float outlineBlackG() const { return outBlackG; }
+  float outlineBlackB() const { return outBlackB; }
+
   /** Capture cinematic camera (default on). */
   bool actionCameraEnabled() const { return actionCamera; }
   void setActionCameraEnabled(bool v) { actionCamera = v; }
@@ -108,6 +117,9 @@ private:
   float music;
   float sfx;
   float outline; // 0..1 thickness control
+  // Per-side outline colours (0..1 RGB)
+  float outWhiteR, outWhiteG, outWhiteB;
+  float outBlackR, outBlackG, outBlackB;
   bool actionCamera;   // capture close-up cam (default on)
   bool suggestedMoves; // pulse suggested tiles (default off)
   float explosionForceUI; // 0..1 (0.5 → 1× default blast)
@@ -115,7 +127,7 @@ private:
   AudioEngine* audioEngine;
   PieceEditor* pieceEditor;
 
-  static const int kMaxSliders = 4;
+  static const int kMaxSliders = 12;
   static const int kMaxButtons = 8;
   int sliderCount;
   int buttonCount;

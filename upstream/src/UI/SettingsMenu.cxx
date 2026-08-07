@@ -1,5 +1,4 @@
-#define GL_GLEXT_PROTOTYPES
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 #include "SettingsMenu.hxx"
 #include "PieceEditor.hxx"
 #include "../Audio/AudioEngine.hxx"
@@ -24,6 +23,9 @@ SettingsMenu::SettingsMenu()
     quitNoX(0), quitNoY(0), quitNoW(140), quitNoH(40),
     editSlider(-1), editLen(0), editBlink(0.f),
     master(0.9f), music(0.45f), sfx(0.7f), outline(0.15f),
+    // White = red, Black = blue (team readability for multiplayer)
+    outWhiteR(0.95f), outWhiteG(0.12f), outWhiteB(0.12f),
+    outBlackR(0.15f), outBlackG(0.40f), outBlackB(0.95f),
     actionCamera(true),
     suggestedMoves(false),
     explosionForceUI(0.5f),
@@ -63,7 +65,8 @@ void SettingsMenu::applyToAudio() {
 
 float SettingsMenu::panelHeightForPage() const {
   if (page == PAGE_SOUND) return 320.f;
-  if (page == PAGE_VIDEO) return 320.f;
+  // thickness + 6 RGB sliders + action cam + reset colours + back
+  if (page == PAGE_VIDEO) return 680.f;
   if (page == PAGE_GAMEPLAY) return 320.f;
   if (page == PAGE_ROOT) return 420.f; // + Return / Quit
   return 300.f;
@@ -89,9 +92,16 @@ void SettingsMenu::rebuildPage() {
     buttons[buttonCount++] = {"< Back", 0, 0, 0, 0, -1};
   } else if (page == PAGE_VIDEO) {
     sliders[sliderCount++] = {"Outline thickness", &outline, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"White outline R", &outWhiteR, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"White outline G", &outWhiteG, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"White outline B", &outWhiteB, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"Black outline R", &outBlackR, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"Black outline G", &outBlackG, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"Black outline B", &outBlackB, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
     buttons[buttonCount++] = {
       actionCamera ? "Action camera: ON" : "Action camera: OFF",
       0, 0, 0, 0, -2};
+    buttons[buttonCount++] = {"Reset outline colours", 0, 0, 0, 0, -4};
     buttons[buttonCount++] = {"< Back", 0, 0, 0, 0, -1};
   } else if (page == PAGE_GAMEPLAY) {
     sliders[sliderCount++] = {"Explosion force", &explosionForceUI, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
@@ -651,6 +661,11 @@ bool SettingsMenu::onMouseButton(int button, int action, float mx, float my) {
         rebuildPage();
       } else if (act == -3) {
         suggestedMoves = !suggestedMoves;
+        rebuildPage();
+      } else if (act == -4) {
+        // Reset per-side outline colours to red / blue defaults
+        outWhiteR = 0.95f; outWhiteG = 0.12f; outWhiteB = 0.12f;
+        outBlackR = 0.15f; outBlackG = 0.40f; outBlackB = 0.95f;
         rebuildPage();
       } else if (act < 0) {
         page = PAGE_ROOT;

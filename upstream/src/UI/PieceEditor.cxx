@@ -1,5 +1,4 @@
-#define GL_GLEXT_PROTOTYPES
-#include <GLFW/glfw3.h>
+#include "../gl_compat.hxx"
 #include "PieceEditor.hxx"
 #include "../constants.hxx"
 #include "../utils/math.hxx"
@@ -357,13 +356,18 @@ void PieceEditor::draw3DPreview(std::map<int, ShaderProgram*>* programs,
   float len = std::sqrt(lightDir.x*lightDir.x + lightDir.y*lightDir.y + lightDir.z*lightDir.z) + 1e-5f;
   lightDir.x /= len; lightDir.y /= len; lightDir.z /= len;
 
-  auto drawMeshBorder = [&](Mesh* m, std::vector<GLfloat>& mm) {
+  auto drawMeshBorder = [&](Mesh* m, std::vector<GLfloat>& mm, bool whiteSide) {
     if (!m) return;
     glUseProgram(border->id);
     glCullFace(GL_FRONT);
     border->setViewMatrix(&view);
     border->setProjectionMatrix(&proj);
     border->setFloat("outlineFactor", outlineFactor);
+    // Preview: white-side red, black-side blue (match game defaults)
+    if (whiteSide)
+      border->setVector4f("outlineColor", 0.95f, 0.12f, 0.12f, 1.f);
+    else
+      border->setVector4f("outlineColor", 0.15f, 0.40f, 0.95f, 1.f);
     border->setMoveMatrix(&mm);
     auto nm = inverse(&mm);
     nm = transpose(&nm);
@@ -400,18 +404,30 @@ void PieceEditor::draw3DPreview(std::map<int, ShaderProgram*>* programs,
     m->draw();
   };
 
-  // Board cell at origin
+  // Board cell at origin (black outline)
   if (cell) {
     auto mm = getIdentityMatrix();
-    drawMeshBorder(cell, mm);
+    glUseProgram(border->id);
+    glCullFace(GL_FRONT);
+    border->setViewMatrix(&view);
+    border->setProjectionMatrix(&proj);
+    border->setFloat("outlineFactor", outlineFactor);
+    border->setVector4f("outlineColor", 0.f, 0.f, 0.f, 1.f);
+    border->setMoveMatrix(&mm);
+    {
+      auto nm = inverse(&mm);
+      nm = transpose(&nm);
+      border->setNormalMatrix(&nm);
+    }
+    cell->draw();
     drawMeshCel(cell, mm, theme.boardLight);
   }
 
-  // Piece with edit transform (white team)
+  // Piece with edit transform (white team) — red outline by default
   if (piece) {
     auto mm = PieceTransformStore::buildPieceMatrix(
       +ptype, 0.f, 0.f, 0.f, 2.0f, edit);
-    drawMeshBorder(piece, mm);
+    drawMeshBorder(piece, mm, true);
     drawMeshCel(piece, mm, theme.pieceUser);
   }
 
