@@ -440,7 +440,7 @@ void celShadingRender(
   const float* neonLightIntensity = nullptr,
   int neonLightCount = 0,
   float outlineWhiteR = 0.95f, float outlineWhiteG = 0.12f, float outlineWhiteB = 0.12f,
-  float outlineBlackR = 0.15f, float outlineBlackG = 0.40f, float outlineBlackB = 0.95f);
+  float outlineBlackR = 0.62f, float outlineBlackG = 0.18f, float outlineBlackB = 0.92f);
 
 static void printNetUsage() {
   std::cout << "Multiplayer (experimental):\n"

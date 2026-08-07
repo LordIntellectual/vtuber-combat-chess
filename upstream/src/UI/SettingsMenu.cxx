@@ -24,8 +24,9 @@ SettingsMenu::SettingsMenu()
     quitNoX(0), quitNoY(0), quitNoW(140), quitNoH(40),
     editSlider(-1), editLen(0), editBlink(0.f),
     master(0.9f), music(0.45f), sfx(0.7f), outline(0.15f),
+    // White = red, Black = purple (project palette / multiplayer readability)
     outWhiteR(0.95f), outWhiteG(0.12f), outWhiteB(0.12f),
-    outBlackR(0.15f), outBlackG(0.40f), outBlackB(0.95f),
+    outBlackR(0.62f), outBlackG(0.18f), outBlackB(0.92f),
     actionCamera(true),
     suggestedMoves(false),
     explosionForceUI(0.5f),
@@ -662,8 +663,12 @@ bool SettingsMenu::onMouseButton(int button, int action, float mx, float my) {
         suggestedMoves = !suggestedMoves;
         rebuildPage();
       } else if (act == -4) {
+<<<<<<< HEAD
+=======
+        // Reset per-side outline colours to red / purple defaults
+>>>>>>> 09ef055 (feat: ball-lightning particles (red/purple) and purple black outlines)
         outWhiteR = 0.95f; outWhiteG = 0.12f; outWhiteB = 0.12f;
-        outBlackR = 0.15f; outBlackG = 0.40f; outBlackB = 0.95f;
+        outBlackR = 0.62f; outBlackG = 0.18f; outBlackB = 0.92f;
         rebuildPage();
       } else if (act < 0) {
         page = PAGE_ROOT;

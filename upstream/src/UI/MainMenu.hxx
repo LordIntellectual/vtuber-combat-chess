@@ -100,17 +100,21 @@ private:
   float fovYDeg_;
   float uiLayerPanX_, uiLayerPanY_; // pixel pan applied to UI FBO this frame
 
-  // Effect plane (between art and UI): simple snow-like particles
+  // Effect plane (between art and UI): red/purple ball-lightning particles
   static const int kMaxEffectParticles = 140;
+  enum EffectHue { EFFECT_RED = 0, EFFECT_PURPLE = 1 };
   struct EffectParticle {
     float x, y;
     float vx, vy;
     float size;
     float alpha;
-    float seed; // per-particle phase for uneven wind
+    float seed; // per-particle phase for uneven wind / crackle
+    int hue;    // EFFECT_RED or EFFECT_PURPLE
   };
   EffectParticle effectParts_[kMaxEffectParticles];
   int effectCount_;
+  int effectRedCount_;
+  int effectPurpleCount_;
   bool effectSeeded_;
   float cursorX_, cursorY_;
   bool cursorKnown_;
@@ -178,6 +182,10 @@ private:
   void drawEffectLayer();
   /** Recycle particle that left exitEdge onto the opposite side of the plane. */
   void respawnEffectParticle(EffectParticle& p, int w, int h, int exitEdge);
+  /** Pick red/purple biased toward balancing active counts. salt = [0,1). */
+  int pickBalancedEffectHue(float salt) const;
+  void assignEffectHue(EffectParticle& p, int hue);
+  void effectHueRgb(int hue, float& r, float& g, float& b) const;
 };
 
 #endif

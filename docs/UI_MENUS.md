@@ -91,19 +91,21 @@ framing (menu upper-right, hits still centre).
 
 **Role:** Sits **behind the menu UI** and **in front of hero art**. Flat 2D, same ortho.
 
-**Sim (test style — small white rectangles as snowflakes):**
+**Look:** Red / purple **ball lightning** (matches team outline palette — white=red, black=purple).
+Additive glow discs + hot core + flickering jagged crackle lines. No particle–particle collision.
+
+**Sim:**
 
 | Force | Behaviour |
 |-------|-----------|
 | Uneven wind | Global wind from stacked sines of `motionT_`, plus spatial / per-particle phase gusts. Particles track toward wind velocity with light drag. |
 | Cursor repel | On mouse move, store screen `cursorX_/Y_`. Each particle within ~110 px is accelerated away; falloff is stronger near the cursor. |
-| Recycle | Leave plane bounds → **destroy** and birth a new flake on the **opposite** edge, moving inward (no edge pile-up). **No** particle–particle collision. |
+| Recycle | Leave plane bounds → **destroy** and birth a new orb on the **opposite** edge, moving inward (no edge pile-up). |
+| Colour balance | Active red/purple counts tracked. On spawn, probability of purple rises when red outnumbers purple (and vice versa). Soft clamp so spawns stay mixed. |
 
-**Code:** `seedEffectParticles`, `updateEffectLayer`, `drawEffectLayer`, `respawnEffectParticle` in `MainMenu.cxx`. Count: `kMaxEffectParticles` (140). Reseed on `show()`.
+**Code:** `seedEffectParticles`, `updateEffectLayer`, `drawEffectLayer`, `respawnEffectParticle`, `pickBalancedEffectHue` in `MainMenu.cxx`. Count: `kMaxEffectParticles` (140). Reseed on `show()`.
 
-**Tuning knobs (in `updateEffectLayer`):** `windBase*`, local gust amplitudes, `repelRadius` / `repelStrength`, `drag`, particle size/alpha in seed/respawn.
-
-**Future:** swap white quads for textured flakes / embers; optional mid-layer pan between art and UI; disable or retune per theme.
+**Tuning knobs:** wind / repel / drag in `updateEffectLayer`; glow radii & crackle in `drawEffectLayer`; hue RGB in `effectHueRgb`.
 
 ## Related assets
 
