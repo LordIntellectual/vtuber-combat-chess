@@ -13,7 +13,8 @@ AudioEngine::AudioEngine()
     engine(nullptr), musicSound(nullptr), musicFadeOut(nullptr),
     musicGain(1.f), fadeOutGain(0.f), fadeT(0.f), fadeDur(1.6f),
     fading(false), analysisDecoder(nullptr),
-    levelSmooth(0.f), bassSmooth(0.f) {}
+    levelSmooth(0.f), bassSmooth(0.f),
+    analysisLp1_(0.f), analysisLp2_(0.f), analysisLp3_(0.f) {}
 
 AudioEngine::~AudioEngine() { shutdown(); }
 
@@ -91,6 +92,7 @@ void AudioEngine::closeMusicAnalysis() {
   analysisAbsPath.clear();
   levelSmooth = 0.f;
   bassSmooth = 0.f;
+  analysisLp1_ = analysisLp2_ = analysisLp3_ = 0.f;
 }
 
 void AudioEngine::openMusicAnalysis(const std::string& absPath) {
@@ -118,7 +120,10 @@ void AudioEngine::updateMusicAnalysis() {
   if (!musicSound || !analysisDecoder || !musicOn) {
     // Decay toward silence when no music
     levelSmooth *= 0.90f;
-    bassSmooth *= 0.90f;
+    bassSmooth *= 0.88f;
+    analysisLp1_ *= 0.9f;
+    analysisLp2_ *= 0.9f;
+    analysisLp3_ *= 0.9f;
     return;
   }
 
@@ -127,43 +132,62 @@ void AudioEngine::updateMusicAnalysis() {
     return;
 
   ma_decoder* dec = (ma_decoder*)analysisDecoder;
-  // Peek a short window of PCM around the playhead
-  const ma_uint64 win = 1024;
+  ma_uint32 sampleRate = dec->outputSampleRate;
+  if (sampleRate < 8000) sampleRate = 48000;
+
+  // Longer window helps resolve low frequencies (~kick period)
+  const ma_uint64 win = 2048;
   ma_uint64 seek = (cursor > win / 2) ? (cursor - win / 2) : 0;
   if (ma_decoder_seek_to_pcm_frame(dec, seek) != MA_SUCCESS) return;
 
-  float buf[1024 * 2];
+  float buf[2048 * 2];
   ma_uint64 framesRead = 0;
-  if (ma_decoder_read_pcm_frames(dec, buf, win, &framesRead) != MA_SUCCESS || framesRead < 32)
+  if (ma_decoder_read_pcm_frames(dec, buf, win, &framesRead) != MA_SUCCESS || framesRead < 64)
     return;
 
-  // Mono RMS + crude bass (exponential low-pass then RMS of abs)
+  // 3-pole one-pole cascade ≈ steeper low-pass. Target ~70 Hz so mids/hats
+  // (snare, leads, hi-hats) contribute little to the menu pulse.
+  const float fc = 70.f;
+  const float a = 1.f - std::exp(-2.f * (float)M_PI * fc / (float)sampleRate);
+
   double sumSq = 0.0;
   double sumBassSq = 0.0;
-  float lp = 0.f;
-  const float a = 0.12f; // low-pass coefficient (~bass emphasis)
+  float lp1 = analysisLp1_;
+  float lp2 = analysisLp2_;
+  float lp3 = analysisLp3_;
   for (ma_uint64 i = 0; i < framesRead; ++i) {
     float L = buf[i * 2 + 0];
     float R = buf[i * 2 + 1];
     float m = 0.5f * (L + R);
     sumSq += (double)m * (double)m;
-    lp = lp + a * (m - lp);
-    sumBassSq += (double)lp * (double)lp;
+    lp1 += a * (m - lp1);
+    lp2 += a * (lp1 - lp2);
+    lp3 += a * (lp2 - lp3);
+    sumBassSq += (double)lp3 * (double)lp3;
   }
+  analysisLp1_ = lp1;
+  analysisLp2_ = lp2;
+  analysisLp3_ = lp3;
+
   float rms = (float)std::sqrt(sumSq / (double)framesRead);
   float bass = (float)std::sqrt(sumBassSq / (double)framesRead);
 
-  // Normalise — full tracks often sit low; boost then clamp
-  rms = std::min(1.f, rms * 4.5f);
-  bass = std::min(1.f, bass * 6.5f);
+  // Gentle gain — avoid slamming into 1.0 for entire bars
+  rms = std::min(1.f, rms * 3.2f);
+  // Bass energy after 3-pole LP is smaller; moderate boost + soft compress
+  bass = bass * 5.0f;
+  bass = bass / (1.f + bass * 1.4f); // soft knee, rarely pegs at 1
+  if (bass > 1.f) bass = 1.f;
+  // Noise gate: ignore tiny residual from mids leaking through
+  if (bass < 0.04f) bass *= bass / 0.04f;
 
-  // Attack / release envelope (punchy bass for techno)
+  // Fast attack / medium release so kicks punch without hanging at max
   auto env = [](float cur, float target, float attack, float release) {
     float k = (target > cur) ? attack : release;
     return cur + (target - cur) * k;
   };
-  levelSmooth = env(levelSmooth, rms, 0.45f, 0.12f);
-  bassSmooth = env(bassSmooth, bass, 0.55f, 0.10f);
+  levelSmooth = env(levelSmooth, rms, 0.35f, 0.10f);
+  bassSmooth = env(bassSmooth, bass, 0.50f, 0.14f);
 }
 
 float AudioEngine::musicTargetVolume() const {

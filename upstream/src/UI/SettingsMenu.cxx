@@ -22,7 +22,7 @@ SettingsMenu::SettingsMenu()
     quitYesX(0), quitYesY(0), quitYesW(140), quitYesH(40),
     quitNoX(0), quitNoY(0), quitNoW(140), quitNoH(40),
     editSlider(-1), editLen(0), editBlink(0.f),
-    master(0.9f), music(0.45f), sfx(0.7f), outline(0.15f),
+    master(0.9f), music(0.45f), sfx(0.7f), menuPulseSens(0.4f), outline(0.15f),
     // White = red, Black = purple (project palette / multiplayer readability)
     outWhiteR(0.95f), outWhiteG(0.12f), outWhiteB(0.12f),
     outBlackR(0.62f), outBlackG(0.18f), outBlackB(0.92f),
@@ -64,7 +64,7 @@ void SettingsMenu::applyToAudio() {
 }
 
 float SettingsMenu::panelHeightForPage() const {
-  if (page == PAGE_SOUND) return 320.f;
+  if (page == PAGE_SOUND) return 380.f; // + menu pulse slider
   // thickness + 6 RGB sliders + action cam + reset colours + back
   if (page == PAGE_VIDEO) return 680.f;
   if (page == PAGE_GAMEPLAY) return 320.f;
@@ -89,6 +89,7 @@ void SettingsMenu::rebuildPage() {
     sliders[sliderCount++] = {"Master volume", &master, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
     sliders[sliderCount++] = {"Music volume", &music, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
     sliders[sliderCount++] = {"Sound effects", &sfx, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
+    sliders[sliderCount++] = {"Menu pulse sensitivity", &menuPulseSens, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
     buttons[buttonCount++] = {"< Back", 0, 0, 0, 0, -1};
   } else if (page == PAGE_VIDEO) {
     sliders[sliderCount++] = {"Outline thickness", &outline, 0, 0, 0, 0, 0, 0, 0, 0, true, 0, 100};
@@ -405,7 +406,8 @@ void SettingsMenu::draw(int screenW, int screenH) {
   drawText(panelX + 24, panelY + 16, title, 0.85f, 0.55f, 1.f, 2.0f);
 
   const char* hint = "Click a category  |  S / Esc to close";
-  if (page == PAGE_SOUND) hint = "Drag track or click number to type  |  Esc";
+  if (page == PAGE_SOUND)
+    hint = "Menu pulse = bass reaction strength  |  Esc";
   if (page == PAGE_VIDEO) hint = "Click number to type exact %  |  Esc";
   if (page == PAGE_GAMEPLAY) hint = "Click number to type exact %  |  Esc";
   drawText(panelX + 24, panelY + 46, hint, 0.65f, 0.7f, 0.8f, 1.1f);
