@@ -47,6 +47,8 @@ MainMenu::MainMenu()
     menuPlaneZ_(-3.2f),
     bgPlaneZ_(-4.0f),
     fovYDeg_(42.f),
+    uiLayerPanX_(0.f),
+    uiLayerPanY_(0.f),
     panelX(0), panelY(0), panelW(640), panelH(520),
     buttonCount(0),
     popupButtonCount(0),
@@ -383,101 +385,78 @@ void MainMenu::ensureFbo(int w, int h) {
 
 void MainMenu::updateParallax(float dt) {
   motionT_ += dt;
-  // Subtle pan + tilt (radians). Kept small so framing stays centred.
-  camPanX_ = 0.05f * std::sin(motionT_ * 0.22f);
-  camPanY_ = 0.04f * std::cos(motionT_ * 0.17f);
+  // Normalised pan in [-1, 1]-ish; converted to pixels in draw/project.
+  camPanX_ = std::sin(motionT_ * 0.22f);
+  camPanY_ = std::cos(motionT_ * 0.17f);
+  // Unused by 2.5D path; kept for future true-3D experiments.
   planeTiltX_ = 0.025f * std::sin(motionT_ * 0.19f + 0.4f);
   planeTiltY_ = 0.030f * std::cos(motionT_ * 0.15f);
 }
 
 void MainMenu::drawParallaxScene(int screenW, int screenH) {
+  // 2.5D orthographic layers (NOT perspective 3D).
+  // Prior true-3D paths mis-framed because shader lookAt/proj matrices are not
+  // valid for glLoadMatrixf, and even glFrustum variants left the FBO plane
+  // off-centre while hit-testing stayed 1:1 (menu upper-right, clicks centre).
+  // Layers share the same y-down ortho as the UI FBO, so framing always matches.
   ncaResetPipelineState();
   glViewport(0, 0, screenW, screenH);
-  glEnable(GL_DEPTH_TEST);
-  glDepthFunc(GL_LEQUAL);
+  glDisable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glClearColor(0.02f, 0.03f, 0.06f, 1.f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT);
 
-  float aspect = (screenH > 0) ? (float)screenW / (float)screenH : 1.777f;
-  const float zNear = 0.1f;
-  const float zFar = 50.f;
-  const float tanHalf = std::tan(0.5f * fovYDeg_ * (float)M_PI / 180.f);
-
-  // Use fixed-function GL camera (identity look down -Z). Do NOT use
-  // getLookAtMatrix/getPerspectiveProjMatrix here — those matrices are stored
-  // for the game's shader path and are not valid for glLoadMatrixf.
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
+  glOrtho(0, screenW, screenH, 0, -1, 1);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+
+  // Far art drifts more than the near UI plane (parallax depth cue).
+  const float bgAmpX = 28.f;
+  const float bgAmpY = 18.f;
+  const float uiAmpX = 10.f;
+  const float uiAmpY = 7.f;
+  const float bgPanX = camPanX_ * bgAmpX;
+  const float bgPanY = camPanY_ * bgAmpY;
+  const float uiPanX = camPanX_ * uiAmpX;
+  const float uiPanY = camPanY_ * uiAmpY;
+  // Remember for mouse → UI (same frame values live in members too).
+  uiLayerPanX_ = uiPanX;
+  uiLayerPanY_ = uiPanY;
+
+  // Far background: slightly oversize so pan never shows edges.
   {
-    float fH = zNear * tanHalf;
-    float fW = fH * aspect;
-    glFrustum(-fW, fW, -fH, fH, zNear, zFar);
+    const float bgScale = 1.12f;
+    const float bw = (float)screenW * bgScale;
+    const float bh = (float)screenH * bgScale;
+    const float bx = ((float)screenW - bw) * 0.5f + bgPanX;
+    const float by = ((float)screenH - bh) * 0.5f + bgPanY;
+    if (bgLoaded && bgTex) {
+      drawTexturedRect(bx, by, bw, bh, bgTex);
+    } else {
+      drawRect(0, 0, (float)screenW, (float)screenH, 0.05f, 0.07f, 0.12f, 1.f);
+    }
+    // Soft darken so semi-transparent menu panel stays readable.
+    drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.32f);
   }
 
-  glMatrixMode(GL_MODELVIEW);
-
-  auto drawPlane = [&](float z, float scale, GLuint tex, bool hasTex, float darken) {
-    // Plane faces the camera at z (negative). Size fills FOV at |z|.
-    float dist = std::fabs(z);
-    float halfH = dist * tanHalf * scale;
-    float halfW = halfH * aspect;
-
-    glLoadIdentity();
-    // Camera pan: move world opposite the pan so the centre stays in frame
-    glTranslatef(-camPanX_, -camPanY_, 0.f);
-    // Shared rig tilt (parallax between bg and menu planes at different z)
-    glRotatef(planeTiltY_ * 180.f / (float)M_PI, 0.f, 1.f, 0.f);
-    glRotatef(planeTiltX_ * 180.f / (float)M_PI, 1.f, 0.f, 0.f);
-    glTranslatef(0.f, 0.f, z);
-
-    if (hasTex && tex) {
-      glEnable(GL_TEXTURE_2D);
-      glBindTexture(GL_TEXTURE_2D, tex);
-      glColor4f(1.f, 1.f, 1.f, 1.f);
-    } else {
-      glDisable(GL_TEXTURE_2D);
-      glColor4f(0.05f, 0.07f, 0.12f, 1.f);
-    }
-    // FBO was drawn with y-down ortho; OpenGL textures have V=0 at bottom.
-    // Top of plane (+Y) must sample the top of the UI (V=1).
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.f, 1.f); glVertex3f(-halfW,  halfH, 0.f); // top-left
-    glTexCoord2f(1.f, 1.f); glVertex3f( halfW,  halfH, 0.f); // top-right
-    glTexCoord2f(1.f, 0.f); glVertex3f( halfW, -halfH, 0.f); // bottom-right
-    glTexCoord2f(0.f, 0.f); glVertex3f(-halfW, -halfH, 0.f); // bottom-left
-    glEnd();
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDisable(GL_TEXTURE_2D);
-
-    if (darken > 0.f) {
-      glColor4f(0.02f, 0.03f, 0.07f, darken);
-      glBegin(GL_QUADS);
-      glVertex3f(-halfW,  halfH, 0.001f);
-      glVertex3f( halfW,  halfH, 0.001f);
-      glVertex3f( halfW, -halfH, 0.001f);
-      glVertex3f(-halfW, -halfH, 0.001f);
-      glEnd();
-    }
-  };
-
-  drawPlane(bgPlaneZ_, 1.18f, bgTex, bgLoaded, 0.32f);
-  if (fboColor_)
-    drawPlane(menuPlaneZ_, 1.0f, fboColor_, true, 0.f);
+  // Near UI: FBO drawn 1:1 screen size, small pan for depth (hits compensate).
+  if (fboColor_) {
+    drawTexturedRect(uiPanX, uiPanY, (float)screenW, (float)screenH, fboColor_);
+  }
 
   ncaResetPipelineState();
   glDisable(GL_DEPTH_TEST);
 }
 
 bool MainMenu::projectMouseToUi(float mx, float my, float& uiX, float& uiY) const {
-  // Menu plane is sized to fill the FOV and stays centred; pan/tilt are subtle.
-  // Screen pixels map 1:1 to UI layout (same as classic 2D menu). Full ray–plane
-  // would add only sub-pixel error at current amplitudes and is easy to reintroduce.
+  // UI layer is drawn at (uiLayerPanX_, uiLayerPanY_); invert that offset.
   if (lastW < 1 || lastH < 1) return false;
-  uiX = mx;
-  uiY = my;
+  uiX = mx - uiLayerPanX_;
+  uiY = my - uiLayerPanY_;
   return true;
 }
 

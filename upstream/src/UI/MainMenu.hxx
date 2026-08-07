@@ -7,9 +7,10 @@
 #include "../Network/LobbyClient.hxx"
 
 /**
- * Post-splash main menu with optional 3D parallax stage (root + multiplayer).
- * UI is laid out in screen pixels, rendered to an FBO, then drawn on a near
- * transparent plane; art sits on a larger far plane. Mouse hits use ray–plane.
+ * Post-splash main menu with 2.5D parallax (root + multiplayer).
+ * UI is laid out in screen pixels, rendered to a transparent FBO, then composited
+ * over a slightly oversize far art layer. Both layers use the same y-down ortho;
+ * the far layer pans more than the near UI for depth. Mouse hits invert UI pan.
  */
 class MainMenu {
 public:
@@ -90,11 +91,12 @@ private:
   GLuint fboDepth_;
   int fboW_, fboH_;
   float motionT_;
-  float camPanX_, camPanY_;
-  float planeTiltX_, planeTiltY_; // radians, subtle
-  float menuPlaneZ_;
+  float camPanX_, camPanY_;       // normalised parallax phase [-1..1]
+  float planeTiltX_, planeTiltY_; // reserved (2.5D path does not use tilt)
+  float menuPlaneZ_;              // legacy 3D path (unused by 2.5D)
   float bgPlaneZ_;
   float fovYDeg_;
+  float uiLayerPanX_, uiLayerPanY_; // pixel pan applied to UI FBO this frame
 
   float panelX, panelY, panelW, panelH;
   static const int kMaxButtons = 10;
