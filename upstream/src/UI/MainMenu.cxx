@@ -382,11 +382,11 @@ void MainMenu::ensureFbo(int w, int h) {
 
 void MainMenu::updateParallax(float dt) {
   motionT_ += dt;
-  // Subtle camera pan + plane tilt (radians)
-  camPanX_ = 0.12f * std::sin(motionT_ * 0.22f);
-  camPanY_ = 0.09f * std::cos(motionT_ * 0.17f);
-  planeTiltX_ = 0.035f * std::sin(motionT_ * 0.19f + 0.4f); // pitch
-  planeTiltY_ = 0.045f * std::cos(motionT_ * 0.15f);        // yaw
+  // Subtle camera pan (world XY) + shared plane tilt (radians)
+  camPanX_ = 0.06f * std::sin(motionT_ * 0.22f);
+  camPanY_ = 0.045f * std::cos(motionT_ * 0.17f);
+  planeTiltX_ = 0.028f * std::sin(motionT_ * 0.19f + 0.4f); // pitch
+  planeTiltY_ = 0.032f * std::cos(motionT_ * 0.15f);        // yaw
 }
 
 void MainMenu::drawParallaxScene(int screenW, int screenH) {
@@ -402,12 +402,11 @@ void MainMenu::drawParallaxScene(int screenW, int screenH) {
 
   float aspect = (screenH > 0) ? (float)screenW / (float)screenH : 1.777f;
   auto proj = getPerspectiveProjMatrix(fovYDeg_, aspect, 0.1f, 50.f);
-  Vector3f eye = {camPanX_, camPanY_, 0.15f};
-  Vector3f center = {
-    0.35f * planeTiltY_ + 0.05f * std::sin(motionT_ * 0.11f),
-    -0.25f * planeTiltX_ + 0.04f * std::cos(motionT_ * 0.13f),
-    menuPlaneZ_ * 0.5f
-  };
+
+  // Camera sits near origin, always looks at the center of the menu plane.
+  // Small pan shifts viewpoint; look-at stays on plane centre so framing is stable.
+  Vector3f eye = {camPanX_, camPanY_, 0.f};
+  Vector3f center = {0.f, 0.f, menuPlaneZ_};
   Vector3f up = {0.f, 1.f, 0.f};
   auto view = getLookAtMatrix(eye, center, up);
 
@@ -415,14 +414,17 @@ void MainMenu::drawParallaxScene(int screenW, int screenH) {
   glLoadMatrixf(proj.data());
   glMatrixMode(GL_MODELVIEW);
 
+  const float tanHalf = std::tan(0.5f * fovYDeg_ * (float)M_PI / 180.f);
+
   auto drawPlane = [&](float z, float scale, GLuint tex, bool hasTex, float darken) {
-    // Plane size so it slightly overfills the FOV at |z|
-    float dist = std::fabs(z - eye.z);
-    float halfH = dist * std::tan(0.5f * fovYDeg_ * (float)M_PI / 180.f) * scale;
+    // Exact FOV fill at distance |z| from camera plane z=0, then *scale (bg > 1)
+    float dist = std::fabs(z);
+    float halfH = dist * tanHalf * scale;
     float halfW = halfH * aspect;
+
     glLoadIdentity();
     glMultMatrixf(view.data());
-    // Shared rig tilt (attached planes)
+    // Shared tilt about world origin (both planes attached to same rig)
     glRotatef(planeTiltY_ * 180.f / (float)M_PI, 0.f, 1.f, 0.f);
     glRotatef(planeTiltX_ * 180.f / (float)M_PI, 1.f, 0.f, 0.f);
     glTranslatef(0.f, 0.f, z);
@@ -435,8 +437,8 @@ void MainMenu::drawParallaxScene(int screenW, int screenH) {
       glDisable(GL_TEXTURE_2D);
       glColor4f(0.05f, 0.07f, 0.12f, 1.f);
     }
+    // FBO / PNG: V=0 bottom, V=1 top. World +Y = top of plane = V=1.
     glBegin(GL_QUADS);
-    // Y-up world; V flipped so UI FBO (top-left origin) maps correctly
     glTexCoord2f(0.f, 0.f); glVertex3f(-halfW, -halfH, 0.f);
     glTexCoord2f(1.f, 0.f); glVertex3f( halfW, -halfH, 0.f);
     glTexCoord2f(1.f, 1.f); glVertex3f( halfW,  halfH, 0.f);
@@ -456,8 +458,8 @@ void MainMenu::drawParallaxScene(int screenW, int screenH) {
     }
   };
 
-  // Far art plane (oversize), then near UI plane
-  drawPlane(bgPlaneZ_, 1.22f, bgTex, bgLoaded, 0.35f);
+  // Far art (oversize), then near UI (exact FOV fill)
+  drawPlane(bgPlaneZ_, 1.18f, bgTex, bgLoaded, 0.32f);
   if (fboColor_)
     drawPlane(menuPlaneZ_, 1.0f, fboColor_, true, 0.f);
 
@@ -475,22 +477,17 @@ bool MainMenu::projectMouseToUi(float mx, float my, float& uiX, float& uiY) cons
   float ndcX = (2.f * mx / (float)lastW) - 1.f;
   float ndcY = 1.f - (2.f * my / (float)lastH);
 
-  Vector3f eye = {camPanX_, camPanY_, 0.15f};
-  Vector3f center = {
-    0.35f * planeTiltY_ + 0.05f * std::sin(motionT_ * 0.11f),
-    -0.25f * planeTiltX_ + 0.04f * std::cos(motionT_ * 0.13f),
-    menuPlaneZ_ * 0.5f
-  };
+  // Match drawParallaxScene camera
+  Vector3f eye = {camPanX_, camPanY_, 0.f};
+  Vector3f center = {0.f, 0.f, menuPlaneZ_};
   Vector3f up = {0.f, 1.f, 0.f};
-  // Camera basis
+
   Vector3f f = {center.x - eye.x, center.y - eye.y, center.z - eye.z};
   float fl = std::sqrt(f.x*f.x + f.y*f.y + f.z*f.z) + 1e-8f;
   f.x /= fl; f.y /= fl; f.z /= fl;
-  // s = f × up
   Vector3f s = {f.y*up.z - f.z*up.y, f.z*up.x - f.x*up.z, f.x*up.y - f.y*up.x};
   float sl = std::sqrt(s.x*s.x + s.y*s.y + s.z*s.z) + 1e-8f;
   s.x /= sl; s.y /= sl; s.z /= sl;
-  // u = s × f
   Vector3f u = {s.y*f.z - s.z*f.y, s.z*f.x - s.x*f.z, s.x*f.y - s.y*f.x};
 
   Vector3f dir = {
@@ -501,11 +498,9 @@ bool MainMenu::projectMouseToUi(float mx, float my, float& uiX, float& uiY) cons
   float dl = std::sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z) + 1e-8f;
   dir.x /= dl; dir.y /= dl; dir.z /= dl;
 
-  // Menu plane: z = menuPlaneZ_ after tilt (approx unrotated plane, then inverse tilt)
-  // Work in rig space: transform ray into untilted plane frame
+  // Transform ray into untilted plane frame (inverse of draw rotations: -yaw, -pitch)
   float cy = std::cos(-planeTiltY_), sy = std::sin(-planeTiltY_);
   float cx = std::cos(-planeTiltX_), sx = std::sin(-planeTiltX_);
-  // Inverse yaw then inverse pitch on origin-relative eye/dir
   auto rotY = [&](float x, float y, float z, float& ox, float& oy, float& oz) {
     ox = cy * x + sy * z; oy = y; oz = -sy * x + cy * z;
   };
@@ -519,19 +514,19 @@ bool MainMenu::projectMouseToUi(float mx, float my, float& uiX, float& uiY) cons
   rotX(tx, ty, tz, dx, dy, dz);
 
   if (std::fabs(dz) < 1e-6f) return false;
-  float t = (menuPlaneZ_ - ez) / dz;
-  if (t < 0.f) return false;
-  float px = ex + t * dx;
-  float py = ey + t * dy;
+  float tHit = (menuPlaneZ_ - ez) / dz;
+  if (tHit < 0.f) return false;
+  float px = ex + tHit * dx;
+  float py = ey + tHit * dy;
 
-  float dist = std::fabs(menuPlaneZ_ - 0.15f);
+  float dist = std::fabs(menuPlaneZ_);
   float halfH = dist * tanHalf * 1.0f;
   float halfW = halfH * aspect;
   if (px < -halfW || px > halfW || py < -halfH || py > halfH) return false;
 
-  // Map plane X/Y (Y up) → UI pixels (Y down)
+  // Plane X/Y (Y up) → UI pixels (Y down, origin top-left)
   float uu = (px + halfW) / (2.f * halfW);
-  float vv = (halfH - py) / (2.f * halfH); // 0 top
+  float vv = (halfH - py) / (2.f * halfH);
   uiX = uu * (float)lastW;
   uiY = vv * (float)lastH;
   return true;
