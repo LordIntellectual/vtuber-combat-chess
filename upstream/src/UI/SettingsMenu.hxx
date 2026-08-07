@@ -89,7 +89,7 @@ public:
   bool menuElectricBordersEnabled() const { return menuElectric; }
   void setMenuElectricBordersEnabled(bool v) { menuElectric = v; }
 
-  /** Main Menu music-reactive pulse (size/brightness). Default on. Sound settings. */
+  /** Main Menu music-reactive pulse (size/brightness). Default off. Sound settings. */
   bool menuPulseEnabled() const { return menuPulseOn; }
   void setMenuPulseEnabled(bool v) { menuPulseOn = v; }
 
@@ -136,7 +136,7 @@ private:
   float music;
   float sfx;
   float menuPulseSens; // 0..1 Main Menu music-pulse strength
-  bool menuPulseOn;    // Main Menu reactive pulse (default on)
+  bool menuPulseOn;    // Main Menu reactive pulse (default off)
   bool menuElectric;   // Main Menu electric border FX (default off)
   float outline; // 0..1 thickness control
   float outWhiteR, outWhiteG, outWhiteB;
