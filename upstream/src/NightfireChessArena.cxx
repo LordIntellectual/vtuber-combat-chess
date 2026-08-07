@@ -105,9 +105,26 @@ static const char* stateName(int s) {
   }
 }
 
+/** Menu theme vs stage (current theme) music. Crossfade for scene changes. */
+static void playMenuMusic(bool crossfade) {
+  if (!gAudio) return;
+  if (crossfade) gAudio->crossfadeMusic(kMenuMusicFile);
+  else gAudio->playMusic(kMenuMusicFile);
+}
+
+static void playStageMusic(bool crossfade) {
+  if (!gAudio || !gThemes) return;
+  if (crossfade) gAudio->crossfadeMusic(gThemes->current().musicFile);
+  else gAudio->playMusic(gThemes->current().musicFile);
+}
+
 void applyThemeAudio() {
   if (!gThemes || !gAudio) return;
-  gAudio->playMusic(gThemes->current().musicFile);
+  // Theme switch during play → blend into that stage's track
+  if (gInGame && !(gSettings && gSettings->isOpen()))
+    playStageMusic(true);
+  else
+    playStageMusic(false);
   gAudio->playSfx("sfx_theme");
   if (gHud) gHud->setEvent(std::string("Theme → ") + gThemes->current().name);
   std::cout << "[VCC] Theme: " << gThemes->current().name << std::endl;
@@ -133,8 +150,35 @@ static void returnToMainMenu() {
     gMainMenu->setStatus("");
   }
   if (gHud) gHud->setEvent("Main Menu");
-  if (gAudio) gAudio->playSfx("sfx_select");
+  if (gAudio) {
+    gAudio->playSfx("sfx_select");
+    playMenuMusic(true);
+  }
   std::cout << "[VCC] Returned to Main Menu\n";
+}
+
+/** Open in-game settings: stage music → menu theme. */
+static void openInGameSettings() {
+  if (!gSettings) return;
+  gSettingsFromMenu = false;
+  if (!gSettings->isOpen()) {
+    gSettings->openMenu();
+    playMenuMusic(true);
+    if (gHud) gHud->setEvent("Settings");
+    if (gAudio) gAudio->playSfx("sfx_select");
+  }
+}
+
+/** Close settings: if still in a match, menu theme → stage music. */
+static void onSettingsClosed() {
+  if (gSettingsFromMenu && gMainMenu) {
+    gMainMenu->show();
+    gSettingsFromMenu = false;
+    // Already on menu music when opened from Main Menu
+    return;
+  }
+  if (gInGame)
+    playStageMusic(true);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -147,10 +191,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (gSettings && gSettings->isOpen()) {
       bool stillOpen = gSettings->handleBack();
       if (gHud) gHud->setEvent(stillOpen ? "Settings" : "Settings closed");
-      if (!stillOpen && gSettingsFromMenu && gMainMenu) {
-        gMainMenu->show();
-        gSettingsFromMenu = false;
-      }
+      // Music restore / main-menu show handled in main loop when settings closes
       return;
     }
     if (gMainMenu && gMainMenu->isVisible()) {
@@ -159,12 +200,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     }
     // In-game: Esc opens Settings (Quit there returns to Main Menu after confirm)
     if (gInGame && gSettings) {
-      gSettingsFromMenu = false;
-      if (!gSettings->isOpen()) {
-        gSettings->openMenu();
-        if (gHud) gHud->setEvent("Settings");
-        if (gAudio) gAudio->playSfx("sfx_select");
-      }
+      openInGameSettings();
       return;
     }
     return;
@@ -179,13 +215,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
       if (gHud) gHud->visible = !gHud->visible;
     }
     if (key == GLFW_KEY_S) {
+      bool wasOpen = gSettings->isOpen();
       gSettings->toggle();
       if (gHud) gHud->setEvent(gSettings->isOpen() ? "Settings" : "Settings closed");
       if (gAudio) gAudio->playSfx("sfx_select");
-      if (!gSettings->isOpen() && gSettingsFromMenu && gMainMenu) {
-        gMainMenu->show();
-        gSettingsFromMenu = false;
-      }
+      // Opening from main-menu settings path keeps menu music; close → main loop
+      if (!wasOpen && gSettings->isOpen() && gInGame)
+        playMenuMusic(true);
     }
     return;
   }
@@ -205,10 +241,15 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
   // S: settings menu (in-game)
   if (key == GLFW_KEY_S) {
     if (gSettings) {
-      gSettingsFromMenu = false;
-      gSettings->toggle();
-      gHud->setEvent(gSettings->isOpen() ? "Settings — Sound / Video / Gameplay" : "Settings closed");
-      gAudio->playSfx("sfx_select");
+      if (gSettings->isOpen()) {
+        gSettings->closeMenu();
+        gHud->setEvent("Settings closed");
+        gAudio->playSfx("sfx_select");
+        // Stage music restore in main loop
+      } else {
+        openInGameSettings();
+        gHud->setEvent("Settings — Sound / Video / Gameplay");
+      }
     }
     return;
   }
@@ -229,7 +270,17 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
   }
   if (key == GLFW_KEY_M) {
     gAudio->toggleMusic();
-    if (gAudio->musicEnabled()) gAudio->playMusic(gThemes->current().musicFile);
+    if (gAudio->musicEnabled()) {
+      // Resume the track for the current context
+      if (gMainMenu && gMainMenu->isVisible())
+        playMenuMusic(false);
+      else if (gSettings && gSettings->isOpen())
+        playMenuMusic(false);
+      else if (gInGame)
+        playStageMusic(false);
+      else
+        playMenuMusic(false);
+    }
     gHud->setEvent(gAudio->musicEnabled() ? "Music ON" : "Music OFF");
   }
   if (key == GLFW_KEY_F) {
@@ -616,16 +667,15 @@ int main(int argc, char** argv) {
   std::cout << "Author: Lord Intellectual\n";
   std::cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
-  // Audio + default theme before the pre-alpha dialog so music plays under it
+  // Audio ready for SFX; no music until splash is accepted
   ThemeManager themes;
   AudioEngine audio;
   std::string nca = ncaShareRoot();
   audio.init(nca + "audio/");
-  audio.playMusic(themes.current().musicFile);
   gThemes = &themes;
   gAudio = &audio;
 
-  // Pre-alpha disclaimer: blocks board/input setup; music already running
+  // Pre-alpha disclaimer first (SFX ok, music silent)
   {
     PreAlphaSplash splash;
     PreAlphaSplash::Result sr = splash.run(window);
@@ -637,6 +687,8 @@ int main(int argc, char** argv) {
       return 0;
     }
   }
+  // Accept → Main Menu theme starts immediately
+  playMenuMusic(false);
 
   Hud hud;
   SettingsMenu settings;
@@ -714,6 +766,9 @@ int main(int argc, char** argv) {
     mainMenu.show();
     hud.setEvent("Main Menu");
   }
+  // CLI host/join skipped the menu — go straight to stage music
+  if (gInGame)
+    playStageMusic(false);
 
   SmokeGenerator* smokeGenerator = new SmokeGenerator();
   smokeGenerator->initBuffers();
@@ -789,7 +844,7 @@ int main(int argc, char** argv) {
     frameClock.restart();
     starfield.update(dt);
     captureShake.update(dt);
-    audio.update();
+    audio.update(dt);
     glfwPollEvents();
 
     // Network pump (non-blocking) — only while in a match
@@ -864,6 +919,7 @@ int main(int argc, char** argv) {
         settings.openMenu();
         audio.playSfx("sfx_select");
         hud.setEvent("Settings");
+        // Stay on menu music (already playing)
       }
       if (act == MainMenu::ACTION_SINGLE_PLAYER) {
         if (netSession.active()) netSession.close("single_player");
@@ -874,6 +930,7 @@ int main(int argc, char** argv) {
         mainMenu.hide();
         gInGame = true;
         audio.playSfx("sfx_theme");
+        playStageMusic(true); // menu theme → stage theme
         hud.setEvent(std::string("Single Player — Set: ") + pieceSets.current().name);
         std::cout << "[VCC] Single Player\n";
       }
@@ -911,6 +968,7 @@ int main(int argc, char** argv) {
             mainMenu.hide();
             gInGame = true;
             audio.playSfx("sfx_theme");
+            playStageMusic(true);
             hud.setEvent("Online room hosted — waiting for guest");
             std::cout << "[VCC-NET] online host room=" << sess.roomId << "\n";
           }
@@ -943,6 +1001,7 @@ int main(int argc, char** argv) {
               mainMenu.hide();
               gInGame = true;
               audio.playSfx("sfx_theme");
+              playStageMusic(true);
               hud.setEvent("Joining " + room->name + "…");
               std::cout << "[VCC-NET] online join room=" << room->id << "\n";
             }
@@ -951,10 +1010,13 @@ int main(int argc, char** argv) {
       }
     }
 
-    // Settings opened from main menu: restore menu when settings closes
-    if (gSettingsFromMenu && !settings.isOpen() && !gInGame) {
-      mainMenu.show();
-      gSettingsFromMenu = false;
+    // Settings just closed (Esc / Return / S) — music + menu restore
+    {
+      static bool settingsWasOpen = false;
+      bool nowOpen = settings.isOpen();
+      if (settingsWasOpen && !nowOpen)
+        onSettingsClosed();
+      settingsWasOpen = nowOpen;
     }
 
     if (resizing) {
