@@ -639,6 +639,7 @@ int main(int argc, char** argv) {
   gTransforms = &transforms;
   settings.setAudio(&audio);
   settings.setPieceEditor(&pieceEditor);
+  mainMenu.loadBackground(nca + "ui/menu_background.png");
 
   std::map<int, ShaderProgram*> programs;
   try {
