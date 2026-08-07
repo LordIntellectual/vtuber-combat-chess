@@ -449,8 +449,7 @@ void MainMenu::updateMusicPulse(float dt) {
 }
 
 void MainMenu::drawMenuBorder(float x, float y, float w, float h, float intensity) {
-  // Responsive pulse uses heavier chrome so motion reads on stream.
-  // Static (pulse off) uses the lighter 3px look so the menu stays clean.
+  // Line-only borders (no solid edge quads). Responsive uses heavier line for motion.
   if (pulseEnabled_ && electricBorders_) {
     drawElectricBorder(x, y, w, h, intensity);
     return;
@@ -460,15 +459,10 @@ void MainMenu::drawMenuBorder(float x, float y, float w, float h, float intensit
   float er = 1.f;
   float eg = pulseEnabled_ ? (0.25f + 0.12f * intensity) : 0.28f;
   float eb = pulseEnabled_ ? (0.30f + 0.10f * intensity) : 0.30f;
-  // Static: fixed 3px solid + 3px line. Responsive solid (no electric): thicker.
-  const float thick = pulseEnabled_ ? (3.5f + 2.0f * intensity) : 3.f;
+  // Static: 3px line. Responsive (no electric): slightly heavier.
   const float lineW = pulseEnabled_ ? (2.5f + 2.0f * intensity) : 3.f;
 
   glDisable(GL_TEXTURE_2D);
-  drawRect(x, y, w, thick, er, eg, eb, a);
-  drawRect(x, y + h - thick, w, thick, er, eg, eb, a);
-  drawRect(x, y, thick, h, er, eg, eb, a);
-  drawRect(x + w - thick, y, thick, h, er, eg, eb, a);
   glLineWidth(lineW);
   glColor4f(er, eg, eb, a);
   glBegin(GL_LINE_LOOP);
@@ -482,17 +476,12 @@ void MainMenu::drawMenuBorder(float x, float y, float w, float h, float intensit
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {
-  // Responsive-only heavy chrome: thick solid frame + electric crackle
+  // Line base + electric crackle (no solid edge quads)
   float a = 0.75f + 0.25f * intensity;
   float er = 1.f;
   float eg = 0.22f + 0.20f * intensity;
   float eb = 0.28f + 0.15f * intensity;
   glDisable(GL_TEXTURE_2D);
-  const float thick = 3.5f + 2.0f * intensity;
-  drawRect(x, y, w, thick, er, eg, eb, a);                    // top
-  drawRect(x, y + h - thick, w, thick, er, eg, eb, a);        // bottom
-  drawRect(x, y, thick, h, er, eg, eb, a);                    // left
-  drawRect(x + w - thick, y, thick, h, er, eg, eb, a);        // right
   glLineWidth(2.5f + 2.0f * intensity);
   glColor4f(er, eg, eb, a);
   glBegin(GL_LINE_LOOP);
