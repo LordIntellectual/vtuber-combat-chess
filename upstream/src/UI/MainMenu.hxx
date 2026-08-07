@@ -64,12 +64,14 @@ public:
 private:
   bool visible;
   bool hostDialogOpen_;
+  bool quitConfirmOpen_;
   Page page_;
   Action pending;
   int lastW, lastH;
   int hoverBtn;
   int hoverRoom;
   int hoverPopupBtn;
+  int hoverQuitBtn; // 0 yes, 1 no, -1 none
   int selectedRoom_;
   int focusField; // 0 none, 1 hostName, 2 hostPass, 3 joinPass
   std::string hostName;
@@ -103,6 +105,11 @@ private:
   float hnX, hnY, hnW, hnH;
   float hpX, hpY, hpW, hpH;
 
+  // Quit confirmation (Main Menu → Quit)
+  float quitPanelX, quitPanelY, quitPanelW, quitPanelH;
+  float quitYesX, quitYesY, quitYesW, quitYesH;
+  float quitNoX, quitNoY, quitNoW, quitNoH;
+
   static const int ID_GOTO_MP = -10;
   static const int ID_BACK = -11;
   static const int ID_REFRESH = -12;
@@ -114,10 +121,14 @@ private:
   void rebuild();
   void openHostDialog();
   void closeHostDialog();
+  void openQuitConfirm();
+  void closeQuitConfirm();
   int hitButton(float mx, float my) const;
   int hitPopupButton(float mx, float my) const;
   int hitRoom(float mx, float my) const;
   int hitField(float mx, float my) const;
+  bool hitQuitYes(float mx, float my) const;
+  bool hitQuitNo(float mx, float my) const;
   void drawRect(float x, float y, float w, float h, float r, float g, float b, float a);
   void drawTexturedRect(float x, float y, float w, float h, GLuint tex);
   void drawText(float x, float y, const char* text, float r, float g, float b, float scale);
@@ -125,6 +136,7 @@ private:
   void drawField(float x, float y, float w, float h, const std::string& text,
                  bool focused, const char* placeholder);
   void drawHostDialog();
+  void drawQuitConfirm();
   void drawBackground(int screenW, int screenH);
 };
 

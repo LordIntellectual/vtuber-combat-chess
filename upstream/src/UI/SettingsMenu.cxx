@@ -257,12 +257,6 @@ void SettingsMenu::drawQuitConfirm() {
   drawText(quitPanelX + 28, quitPanelY + 72,
            "Are you sure you want to quit?",
            0.9f, 0.92f, 1.f, 1.35f);
-  drawText(quitPanelX + 28, quitPanelY + 100,
-           "In a match: return to Main Menu.",
-           0.7f, 0.75f, 0.82f, 1.15f);
-  drawText(quitPanelX + 28, quitPanelY + 122,
-           "On Main Menu: close the application.",
-           0.7f, 0.75f, 0.82f, 1.15f);
 
   // Yes (destructive)
   drawRect(quitYesX, quitYesY, quitYesW, quitYesH, 0.45f, 0.15f, 0.15f, 1.f);
