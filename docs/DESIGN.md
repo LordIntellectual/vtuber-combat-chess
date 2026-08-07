@@ -67,6 +67,9 @@ Central palette: board dark/light, user/AI piece colors, highlight, clear color,
 On-screen HUD: product title, theme name, AI on/off, FX level, last event, controls strip.  
 Pre-alpha splash before music/control. Victory screen on checkmate/forfeit.
 
+**Menus / parallax / full-screen dim (“veil”):** see **[UI_MENUS.md](UI_MENUS.md)**  
+(Main Menu keeps hero art bright — no full-viewport darken; Settings/modals still dim.)
+
 ### AI
 - AI ON: Stockfish after user move (legal-move / check filtering)
 - AI OFF: human plays black
