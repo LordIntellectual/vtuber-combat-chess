@@ -443,8 +443,8 @@ void PieceEditor::draw3DPreview(std::map<int, ShaderProgram*>* programs,
 void PieceEditor::drawUI() {
   // Dim outside panel only (do not cover the 3D view hole later)
   drawRect(0, 0, (float)lastW, (float)lastH, 0.f, 0.f, 0.f, 0.55f);
-  drawRect(panelX, panelY, panelW, panelH, 0.05f, 0.06f, 0.1f, 0.96f);
-  glColor4f(0.3f, 0.85f, 1.f, 0.9f);
+  drawRect(panelX, panelY, panelW, panelH, 0.09f, 0.05f, 0.13f, 0.96f);
+  glColor4f(1.f, 0.28f, 0.30f, 0.90f);
   glBegin(GL_LINE_LOOP);
   glVertex2f(panelX, panelY);
   glVertex2f(panelX + panelW, panelY);
@@ -525,8 +525,8 @@ void PieceEditor::drawUI() {
     float tx = s.numX + std::max(3.f, (s.numW - tw) * 0.5f);
     drawText(tx, s.numY + 4.f, line, 1.f, 0.95f, 0.55f, 1.15f);
 
-    drawRect(s.x, s.y, s.w, s.h, 0.12f, 0.14f, 0.2f, 1.f);
-    drawRect(s.x, s.y, s.w * t, s.h, 0.25f, 0.75f, 0.95f, 1.f);
+    drawRect(s.x, s.y, s.w, s.h, 0.12f, 0.08f, 0.16f, 1.f);
+    drawRect(s.x, s.y, s.w * t, s.h, 0.55f, 0.28f, 0.85f, 1.f);
     float kx = s.x + s.w * t - 5.f;
     if (kx < s.x) kx = s.x;
     drawRect(kx, s.y - 3.f, 10.f, s.h + 6.f, 1.f, 0.9f, 0.4f, 1.f);

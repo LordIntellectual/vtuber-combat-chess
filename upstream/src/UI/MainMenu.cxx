@@ -754,9 +754,10 @@ void MainMenu::drawText(float x, float y, const char* text,
 }
 
 void MainMenu::drawButton(const Btn& b, bool hover) {
-  float br = hover ? 0.14f : 0.08f;
-  float bg = hover ? 0.18f : 0.10f;
-  float bb = hover ? 0.28f : 0.16f;
+  // Purple-tinted fill (project palette)
+  float br = hover ? 0.18f : 0.10f;
+  float bg = hover ? 0.10f : 0.06f;
+  float bb = hover ? 0.26f : 0.16f;
   if (b.id == (int)ACTION_QUIT || b.id == ID_HOST_DIALOG_BACK) {
     if (b.id == (int)ACTION_QUIT) {
       br = hover ? 0.40f : 0.28f;
@@ -770,7 +771,8 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     bb = hover ? 0.22f : 0.14f;
   }
   drawRect(b.x, b.y, b.w, b.h, br, bg, bb, 0.96f);
-  glColor4f(0.45f, 0.85f, 1.f, hover ? 1.f : 0.75f);
+  // Red border (default); Create keeps green cue
+  glColor4f(1.f, 0.28f, 0.30f, hover ? 1.f : 0.80f);
   if (b.id == ID_HOST_CREATE)
     glColor4f(0.5f, 1.f, 0.7f, hover ? 1.f : 0.85f);
   glBegin(GL_LINE_LOOP);
@@ -784,9 +786,9 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
 
 void MainMenu::drawField(float x, float y, float w, float h, const std::string& text,
                          bool focused, const char* placeholder) {
-  drawRect(x, y, w, h, focused ? 0.12f : 0.06f, focused ? 0.16f : 0.08f,
-           focused ? 0.24f : 0.12f, 1.f);
-  glColor4f(focused ? 0.5f : 0.35f, 0.85f, 1.f, 1.f);
+  drawRect(x, y, w, h, focused ? 0.14f : 0.07f, focused ? 0.08f : 0.05f,
+           focused ? 0.22f : 0.12f, 1.f);
+  glColor4f(focused ? 1.f : 0.85f, focused ? 0.35f : 0.28f, focused ? 0.38f : 0.32f, 1.f);
   glBegin(GL_LINE_LOOP);
   glVertex2f(x, y);
   glVertex2f(x + w, y);
@@ -858,8 +860,8 @@ void MainMenu::drawHostDialog() {
   // Dim multiplayer panel further
   drawRect(0, 0, (float)lastW, (float)lastH, 0.0f, 0.0f, 0.0f, 0.45f);
 
-  drawRect(dlgX, dlgY, dlgW, dlgH, 0.06f, 0.08f, 0.14f, 0.98f);
-  glColor4f(0.4f, 0.85f, 1.f, 0.95f);
+  drawRect(dlgX, dlgY, dlgW, dlgH, 0.09f, 0.05f, 0.13f, 0.98f);
+  glColor4f(1.f, 0.28f, 0.30f, 0.95f);
   glBegin(GL_LINE_LOOP);
   glVertex2f(dlgX, dlgY);
   glVertex2f(dlgX + dlgW, dlgY);
@@ -867,7 +869,7 @@ void MainMenu::drawHostDialog() {
   glVertex2f(dlgX, dlgY + dlgH);
   glEnd();
 
-  drawText(dlgX + 28, dlgY + 24, "Host Online Room", 0.55f, 0.9f, 1.f, 1.8f);
+  drawText(dlgX + 28, dlgY + 24, "Host Online Room", 0.85f, 0.55f, 1.f, 1.8f);
   drawText(dlgX + 28, dlgY + 54, "Choose a name others will see in the list.",
            0.7f, 0.75f, 0.82f, 1.15f);
 
@@ -890,9 +892,9 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  // Semi-transparent menu panel (art is on the far 3D plane)
-  drawRect(panelX, panelY, panelW, panelH, 0.05f, 0.07f, 0.12f, 0.88f);
-  glColor4f(0.35f, 0.75f, 1.f, 0.9f);
+  // Semi-transparent purple-tinted panel; red border (project palette)
+  drawRect(panelX, panelY, panelW, panelH, 0.09f, 0.05f, 0.13f, 0.88f);
+  glColor4f(1.f, 0.28f, 0.30f, 0.92f);
   glBegin(GL_LINE_LOOP);
   glVertex2f(panelX, panelY);
   glVertex2f(panelX + panelW, panelY);
@@ -900,18 +902,18 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
   glVertex2f(panelX, panelY + panelH);
   glEnd();
 
-  drawText(panelX + 24, panelY + 22, "vTuber Combat Chess", 0.55f, 0.9f, 1.f, 2.0f);
+  drawText(panelX + 24, panelY + 22, "vTuber Combat Chess", 0.85f, 0.55f, 1.f, 2.0f);
 
   if (page_ == PAGE_ROOT) {
-    drawText(panelX + 24, panelY + 56, "Main Menu", 0.85f, 0.88f, 0.95f, 1.4f);
+    drawText(panelX + 24, panelY + 56, "Main Menu", 0.9f, 0.82f, 0.95f, 1.4f);
     for (int i = 0; i < buttonCount; ++i)
       drawButton(buttons[i], i == hoverBtn);
   } else {
     drawText(panelX + 24, panelY + 52, "Online Multiplayer",
-             0.85f, 0.88f, 0.95f, 1.35f);
+             0.9f, 0.82f, 0.95f, 1.35f);
 
-    drawRect(listX, listY, listW, listH, 0.03f, 0.04f, 0.07f, 1.f);
-    glColor4f(0.3f, 0.5f, 0.7f, 0.9f);
+    drawRect(listX, listY, listW, listH, 0.05f, 0.03f, 0.08f, 1.f);
+    glColor4f(1.f, 0.28f, 0.30f, 0.85f);
     glBegin(GL_LINE_LOOP);
     glVertex2f(listX, listY);
     glVertex2f(listX + listW, listY);
@@ -929,9 +931,9 @@ void MainMenu::drawUiContent(int screenW, int screenH) {
         bool sel = (i == selectedRoom_);
         bool hov = (i == hoverRoom);
         if (sel)
-          drawRect(listX + 2, ry, listW - 4, rowH - 2, 0.12f, 0.22f, 0.35f, 1.f);
+          drawRect(listX + 2, ry, listW - 4, rowH - 2, 0.22f, 0.10f, 0.28f, 1.f);
         else if (hov)
-          drawRect(listX + 2, ry, listW - 4, rowH - 2, 0.08f, 0.12f, 0.18f, 1.f);
+          drawRect(listX + 2, ry, listW - 4, rowH - 2, 0.14f, 0.08f, 0.18f, 1.f);
         const LobbyRoom& r = rooms_[i];
         std::ostringstream line;
         line << r.name << "  [" << r.players << "/" << r.maxPlayers << "]";

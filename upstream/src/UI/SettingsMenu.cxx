@@ -387,9 +387,10 @@ void SettingsMenu::draw(int screenW, int screenH) {
   glLoadIdentity();
 
   drawRect(0, 0, (float)screenW, (float)screenH, 0.f, 0.f, 0.f, 0.55f);
-  drawRect(panelX, panelY, panelW, panelH, 0.06f, 0.07f, 0.12f, 0.94f);
+  // Purple-tinted panel, red border (match Main Menu / project palette)
+  drawRect(panelX, panelY, panelW, panelH, 0.09f, 0.05f, 0.13f, 0.94f);
 
-  glColor4f(0.3f, 0.85f, 1.f, 0.85f);
+  glColor4f(1.f, 0.28f, 0.30f, 0.90f);
   glBegin(GL_LINE_LOOP);
   glVertex2f(panelX, panelY);
   glVertex2f(panelX + panelW, panelY);
@@ -401,7 +402,7 @@ void SettingsMenu::draw(int screenW, int screenH) {
   if (page == PAGE_SOUND) title = "SETTINGS  /  SOUND";
   if (page == PAGE_VIDEO) title = "SETTINGS  /  VIDEO";
   if (page == PAGE_GAMEPLAY) title = "SETTINGS  /  GAMEPLAY";
-  drawText(panelX + 24, panelY + 16, title, 0.4f, 1.f, 1.f, 2.0f);
+  drawText(panelX + 24, panelY + 16, title, 0.85f, 0.55f, 1.f, 2.0f);
 
   const char* hint = "Click a category  |  S / Esc to close";
   if (page == PAGE_SOUND) hint = "Drag track or click number to type  |  Esc";
@@ -421,11 +422,11 @@ void SettingsMenu::draw(int screenW, int screenH) {
     // Clickable value box (right)
     bool editing = (editSlider == i);
     if (editing)
-      drawRect(s.numX, s.numY, s.numW, s.numH, 0.18f, 0.28f, 0.38f, 1.f);
+      drawRect(s.numX, s.numY, s.numW, s.numH, 0.22f, 0.12f, 0.28f, 1.f);
     else
-      drawRect(s.numX, s.numY, s.numW, s.numH, 0.12f, 0.16f, 0.22f, 1.f);
+      drawRect(s.numX, s.numY, s.numW, s.numH, 0.12f, 0.08f, 0.16f, 1.f);
 
-    glColor4f(editing ? 1.f : 0.4f, editing ? 0.9f : 0.85f, editing ? 0.3f : 1.f, 0.95f);
+    glColor4f(editing ? 1.f : 0.9f, editing ? 0.45f : 0.28f, editing ? 0.35f : 0.32f, 0.95f);
     glBegin(GL_LINE_LOOP);
     glVertex2f(s.numX, s.numY);
     glVertex2f(s.numX + s.numW, s.numY);
@@ -449,15 +450,15 @@ void SettingsMenu::draw(int screenW, int screenH) {
     // Center-ish in the box
     float tw = (float)std::strlen(line) * 7.f * 1.25f;
     float tx = s.numX + std::max(4.f, (s.numW - tw) * 0.5f);
-    drawText(tx, s.numY + 5.f, line, 1.f, 0.95f, 0.55f, 1.25f);
+    drawText(tx, s.numY + 5.f, line, 1.f, 0.9f, 0.85f, 1.25f);
 
-    // Track
-    drawRect(s.x, s.y, s.w, s.h, 0.12f, 0.14f, 0.2f, 1.f);
+    // Track — purple fill, red-ish knob accent kept warm
+    drawRect(s.x, s.y, s.w, s.h, 0.12f, 0.08f, 0.16f, 1.f);
     float fillW = s.w * v;
-    drawRect(s.x, s.y, fillW, s.h, 0.25f, 0.75f, 0.95f, 1.f);
+    drawRect(s.x, s.y, fillW, s.h, 0.55f, 0.28f, 0.85f, 1.f);
     float kx = s.x + fillW - 6.f;
     if (kx < s.x) kx = s.x;
-    drawRect(kx, s.y - 4.f, 12.f, s.h + 8.f, 1.f, 0.9f, 0.4f, 1.f);
+    drawRect(kx, s.y - 4.f, 12.f, s.h + 8.f, 1.f, 0.35f, 0.32f, 1.f);
   }
 
   for (int i = 0; i < buttonCount; i++) {
@@ -468,8 +469,8 @@ void SettingsMenu::draw(int screenW, int screenH) {
     else if (b.action == -10)
       drawRect(b.x, b.y, b.w, b.h, 0.12f, 0.2f, 0.16f, 1.f);
     else
-      drawRect(b.x, b.y, b.w, b.h, 0.12f, 0.16f, 0.24f, 1.f);
-    glColor4f(0.35f, 0.8f, 1.f, 0.9f);
+      drawRect(b.x, b.y, b.w, b.h, 0.14f, 0.08f, 0.20f, 1.f);
+    glColor4f(1.f, 0.28f, 0.30f, 0.90f);
     if (b.action == -11) glColor4f(1.f, 0.5f, 0.45f, 0.95f);
     if (b.action == -10) glColor4f(0.45f, 1.f, 0.7f, 0.95f);
     glBegin(GL_LINE_LOOP);
