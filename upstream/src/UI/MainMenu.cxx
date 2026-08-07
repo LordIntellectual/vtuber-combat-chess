@@ -48,6 +48,11 @@ MainMenu::MainMenu()
     fovYDeg_(42.f),
     uiLayerPanX_(0.f),
     uiLayerPanY_(0.f),
+    effectCount_(0),
+    effectSeeded_(false),
+    cursorX_(0.f),
+    cursorY_(0.f),
+    cursorKnown_(false),
     panelX(0), panelY(0), panelW(640), panelH(520),
     buttonCount(0),
     popupButtonCount(0),
@@ -110,6 +115,8 @@ void MainMenu::show() {
   hostDialogOpen_ = false;
   quitConfirmOpen_ = false;
   statusLine.clear();
+  // Reseed flakes when menu opens so density matches current window size.
+  effectSeeded_ = false;
   rebuild();
 }
 
@@ -392,6 +399,144 @@ void MainMenu::updateParallax(float dt) {
   planeTiltY_ = 0.030f * std::cos(motionT_ * 0.15f);
 }
 
+void MainMenu::respawnEffectParticle(EffectParticle& p, int w, int h, int edge) {
+  // edge: -1 random, 0 top, 1 left, 2 right, 3 bottom (spawn just outside)
+  if (edge < 0) edge = (int)(p.seed * 4.f) % 4;
+  const float margin = 8.f;
+  p.size = 1.5f + std::fmod(p.seed * 17.3f, 3.5f);
+  p.alpha = 0.45f + std::fmod(p.seed * 9.1f, 0.45f);
+  p.vx = 20.f + std::fmod(p.seed * 41.f, 55.f);
+  p.vy = 15.f + std::fmod(p.seed * 23.f, 40.f);
+  switch (edge) {
+    case 0: // from top
+      p.x = std::fmod(p.seed * 997.f, (float)w);
+      p.y = -margin - p.size;
+      break;
+    case 1: // from left
+      p.x = -margin - p.size;
+      p.y = std::fmod(p.seed * 773.f, (float)h);
+      break;
+    case 2: // from right
+      p.x = (float)w + margin + p.size;
+      p.y = std::fmod(p.seed * 661.f, (float)h);
+      p.vx = -std::fabs(p.vx) * 0.6f;
+      break;
+    default: // from bottom (rare upward drift)
+      p.x = std::fmod(p.seed * 883.f, (float)w);
+      p.y = (float)h + margin + p.size;
+      p.vy = -std::fabs(p.vy) * 0.5f;
+      break;
+  }
+}
+
+void MainMenu::seedEffectParticles(int w, int h) {
+  if (w < 1) w = 1280;
+  if (h < 1) h = 720;
+  effectCount_ = kMaxEffectParticles;
+  for (int i = 0; i < effectCount_; ++i) {
+    EffectParticle& p = effectParts_[i];
+    // Deterministic pseudo-random from index (no rand() dependency).
+    p.seed = std::fmod(0.173f * (float)(i + 1) + 0.6180339887f * (float)i, 1.f);
+    if (p.seed < 0.f) p.seed += 1.f;
+    p.size = 1.5f + std::fmod(p.seed * 17.3f, 3.5f);
+    p.alpha = 0.45f + std::fmod(p.seed * 9.1f, 0.45f);
+    p.x = std::fmod(p.seed * 1301.f + (float)i * 17.f, (float)w);
+    p.y = std::fmod(p.seed * 907.f + (float)i * 29.f, (float)h);
+    p.vx = 15.f + std::fmod(p.seed * 53.f, 50.f);
+    p.vy = 12.f + std::fmod(p.seed * 37.f, 35.f);
+  }
+  effectSeeded_ = true;
+}
+
+void MainMenu::updateEffectLayer(float dt, int w, int h) {
+  if (w < 1 || h < 1) return;
+  if (!effectSeeded_ || effectCount_ <= 0)
+    seedEffectParticles(w, h);
+
+  // Clamp dt so a hitch does not teleport flakes.
+  if (dt < 0.f) dt = 0.f;
+  if (dt > 0.05f) dt = 0.05f;
+
+  // Global uneven wind field (pixels / s²-ish via integrated accel).
+  const float t = motionT_;
+  const float windBaseX = 55.f + 40.f * std::sin(t * 0.31f) + 22.f * std::sin(t * 0.73f + 1.2f);
+  const float windBaseY = 35.f + 28.f * std::cos(t * 0.27f) + 18.f * std::sin(t * 0.61f + 0.4f);
+
+  // Cursor repulsion
+  const float repelRadius = 110.f;
+  const float repelRadiusSq = repelRadius * repelRadius;
+  const float repelStrength = 2200.f; // accel scale
+  const float drag = 0.92f;          // velocity damping per ~frame at 60Hz-ish
+  const float dragPow = std::pow(drag, dt * 60.f);
+
+  for (int i = 0; i < effectCount_; ++i) {
+    EffectParticle& p = effectParts_[i];
+
+    // Local wind gust (spatial + per-particle phase)
+    const float gx = 0.012f * p.x + p.seed * 6.28f;
+    const float gy = 0.015f * p.y + p.seed * 4.1f;
+    float windX = windBaseX
+      + 30.f * std::sin(t * 0.9f + gx)
+      + 18.f * std::cos(t * 1.4f + gy + p.seed * 3.f);
+    float windY = windBaseY
+      + 24.f * std::cos(t * 0.8f + gy)
+      + 14.f * std::sin(t * 1.1f + gx);
+
+    // Soft spring toward wind velocity (terminal velocity tracking)
+    const float kTrack = 1.8f;
+    p.vx += (windX - p.vx) * kTrack * dt;
+    p.vy += (windY - p.vy) * kTrack * dt;
+
+    if (cursorKnown_) {
+      float dx = p.x - cursorX_;
+      float dy = p.y - cursorY_;
+      float d2 = dx * dx + dy * dy;
+      if (d2 < repelRadiusSq && d2 > 1.f) {
+        float d = std::sqrt(d2);
+        float falloff = 1.f - (d / repelRadius);
+        falloff *= falloff; // stronger near cursor
+        float inv = (repelStrength * falloff) / d;
+        p.vx += dx * inv * dt;
+        p.vy += dy * inv * dt;
+      }
+    }
+
+    p.vx *= dragPow;
+    p.vy *= dragPow;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+
+    // Wrap / respawn when far outside (no particle-particle collision)
+    const float pad = 24.f;
+    if (p.x < -pad) {
+      respawnEffectParticle(p, w, h, 1);
+    } else if (p.x > (float)w + pad) {
+      respawnEffectParticle(p, w, h, 2);
+    } else if (p.y < -pad) {
+      respawnEffectParticle(p, w, h, 0);
+    } else if (p.y > (float)h + pad) {
+      respawnEffectParticle(p, w, h, 3);
+    }
+  }
+}
+
+void MainMenu::drawEffectLayer() {
+  if (effectCount_ <= 0) return;
+  glDisable(GL_TEXTURE_2D);
+  glBegin(GL_QUADS);
+  for (int i = 0; i < effectCount_; ++i) {
+    const EffectParticle& p = effectParts_[i];
+    const float s = p.size;
+    glColor4f(1.f, 1.f, 1.f, p.alpha);
+    glVertex2f(p.x - s, p.y - s);
+    glVertex2f(p.x + s, p.y - s);
+    glVertex2f(p.x + s, p.y + s);
+    glVertex2f(p.x - s, p.y + s);
+  }
+  glEnd();
+  glColor4f(1.f, 1.f, 1.f, 1.f);
+}
+
 void MainMenu::drawParallaxScene(int screenW, int screenH) {
   // 2.5D orthographic layers (NOT perspective 3D).
   // Prior true-3D paths mis-framed because shader lookAt/proj matrices are not
@@ -441,6 +586,10 @@ void MainMenu::drawParallaxScene(int screenW, int screenH) {
     // No full-screen darken on Main Menu — hero art should stay bright.
     // Settings / dialogs apply their own dim when focus is on the panel.
   }
+
+  // Mid: effect plane (particles) — behind menu UI, in front of art.
+  updateEffectLayer(0.016f, screenW, screenH);
+  drawEffectLayer();
 
   // Near UI: FBO drawn 1:1 screen size, small pan for depth (hits compensate).
   if (fboColor_) {
@@ -711,6 +860,10 @@ void MainMenu::draw(int screenW, int screenH) {
 
 bool MainMenu::onMouseMove(float mx, float my) {
   if (!visible) return false;
+  // Screen-space cursor for effect-layer repulsion (before UI pan remap).
+  cursorX_ = mx;
+  cursorY_ = my;
+  cursorKnown_ = true;
   float uiX = mx, uiY = my;
   if (!projectMouseToUi(mx, my, uiX, uiY)) {
     hoverBtn = hoverRoom = hoverPopupBtn = hoverQuitBtn = -1;
