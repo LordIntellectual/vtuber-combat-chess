@@ -449,18 +449,19 @@ void MainMenu::updateMusicPulse(float dt) {
 }
 
 void MainMenu::drawMenuBorder(float x, float y, float w, float h, float intensity) {
-  // Line-only borders (no solid edge quads). Responsive uses heavier line for motion.
+  // Default/static matches Settings: single 1px red LINE_LOOP (no fill quads).
+  // Responsive (no electric) uses a heavier line so motion still reads.
   if (pulseEnabled_ && electricBorders_) {
     drawElectricBorder(x, y, w, h, intensity);
     return;
   }
 
-  float a = pulseEnabled_ ? (0.80f + 0.15f * intensity) : 0.88f;
+  float a = pulseEnabled_ ? (0.80f + 0.15f * intensity) : 0.90f;
   float er = 1.f;
   float eg = pulseEnabled_ ? (0.25f + 0.12f * intensity) : 0.28f;
   float eb = pulseEnabled_ ? (0.30f + 0.10f * intensity) : 0.30f;
-  // Static: 3px line. Responsive (no electric): slightly heavier.
-  const float lineW = pulseEnabled_ ? (2.5f + 2.0f * intensity) : 3.f;
+  // Settings uses OpenGL default line width = 1.0
+  const float lineW = pulseEnabled_ ? (2.5f + 2.0f * intensity) : 1.f;
 
   glDisable(GL_TEXTURE_2D);
   glLineWidth(lineW);
@@ -933,8 +934,8 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     drawMenuBorder(b.x, b.y, b.w, b.h,
                    (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
   }
-  // Centered label — heavier type when responsive (reads in motion); 2.0 when static
-  const float labelScale = pulseEnabled_ ? 2.5f : 2.0f;
+  // Centered label — Settings buttons use scale 1.5; responsive keeps 2.5 for motion
+  const float labelScale = pulseEnabled_ ? 2.5f : 1.5f;
   float tw = stb_easy_font_width((char*)b.label) * labelScale;
   float th = 8.f * labelScale; // stb_easy_font baseline height ~8
   float tx = b.x + (b.w - tw) * 0.5f;
