@@ -112,7 +112,7 @@ void applyThemeAudio() {
   std::cout << "[VCC] Theme: " << gThemes->current().name << std::endl;
 }
 
-/** Leave match and show main menu (Esc from in-game). */
+/** Leave match and show main menu (e.g. Settings → Quit confirmed while in-game). */
 static void returnToMainMenu() {
   if (gVictory) gVictory->hide();
   if (gSettings && gSettings->isOpen()) gSettings->closeMenu();
@@ -141,7 +141,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
   // Allow key-repeat while typing into value fields
   if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
 
-  // Esc: settings back → main menu multipage back → return to main menu (in-game) → quit (menu root)
+  // Esc: settings back → main menu keys → open settings (in-game)
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     if (gSettings && gSettings->isOpen()) {
       bool stillOpen = gSettings->handleBack();
@@ -156,13 +156,16 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
       gMainMenu->onKey(key, action, mods);
       return;
     }
-    // In-game: Esc returns to Main Menu (does not quit)
-    if (gInGame) {
-      returnToMainMenu();
+    // In-game: Esc opens Settings (Quit there returns to Main Menu after confirm)
+    if (gInGame && gSettings) {
+      gSettingsFromMenu = false;
+      if (!gSettings->isOpen()) {
+        gSettings->openMenu();
+        if (gHud) gHud->setEvent("Settings");
+        if (gAudio) gAudio->playSfx("sfx_select");
+      }
       return;
     }
-    gRunning = false;
-    glfwSetWindowShouldClose(window, 1);
     return;
   }
 
@@ -828,11 +831,15 @@ int main(int argc, char** argv) {
       }
     }
 
-    // Settings → Quit confirmed
+    // Settings → Quit confirmed: leave match → Main Menu; from Main Menu → exit app
     if (settings.consumeQuitRequest()) {
-      gRunning = false;
-      glfwSetWindowShouldClose(window, 1);
-      break;
+      if (gInGame) {
+        returnToMainMenu();
+      } else {
+        gRunning = false;
+        glfwSetWindowShouldClose(window, 1);
+        break;
+      }
     }
 
     // Main menu actions
