@@ -1,0 +1,8 @@
+{
+  "king": {"px": 0, "py": 0, "pz": 0, "rx": 0, "ry": 0, "rz": 0, "scale": 1},
+  "queen": {"px": 0, "py": 0, "pz": 0, "rx": 0, "ry": 0, "rz": 0, "scale": 1},
+  "bishop": {"px": 0, "py": 0, "pz": 0, "rx": 0, "ry": 0, "rz": 0, "scale": 1},
+  "knight": {"px": 0, "py": 0, "pz": 0, "rx": 0, "ry": 0, "rz": 0, "scale": 1},
+  "rook": {"px": 0, "py": 0, "pz": 0, "rx": 0, "ry": 0, "rz": 0, "scale": 1},
+  "pawn": {"px": 0, "py": 0, "pz": 0, "rx": 0, "ry": 0, "rz": 0, "scale": 0.75}
+}
