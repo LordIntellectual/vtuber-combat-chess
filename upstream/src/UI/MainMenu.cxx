@@ -1,13 +1,20 @@
 #include "MainMenu.hxx"
 #include "../utils/utils.hxx"
+#include "../utils/math.hxx"
+#include "../utils/GlState.hxx"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
 #include <cctype>
 #include <sstream>
 #include <iostream>
+#include <cmath>
 
 #include "../../third_party/stb_easy_font.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 MainMenu::MainMenu()
   : visible(false),
@@ -26,6 +33,19 @@ MainMenu::MainMenu()
     blinkT(0.f),
     bgTex(0),
     bgLoaded(false),
+    fbo_(0),
+    fboColor_(0),
+    fboDepth_(0),
+    fboW_(0),
+    fboH_(0),
+    motionT_(0.f),
+    camPanX_(0.f),
+    camPanY_(0.f),
+    planeTiltX_(0.f),
+    planeTiltY_(0.f),
+    menuPlaneZ_(-3.2f),
+    bgPlaneZ_(-4.0f),
+    fovYDeg_(42.f),
     panelX(0), panelY(0), panelW(640), panelH(520),
     buttonCount(0),
     popupButtonCount(0),
@@ -41,11 +61,19 @@ MainMenu::MainMenu()
   rebuild();
 }
 
+void MainMenu::destroyFbo() {
+  if (fboColor_) { glDeleteTextures(1, &fboColor_); fboColor_ = 0; }
+  if (fboDepth_) { glDeleteRenderbuffers(1, &fboDepth_); fboDepth_ = 0; }
+  if (fbo_) { glDeleteFramebuffers(1, &fbo_); fbo_ = 0; }
+  fboW_ = fboH_ = 0;
+}
+
 MainMenu::~MainMenu() {
   if (bgTex) {
     glDeleteTextures(1, &bgTex);
     bgTex = 0;
   }
+  destroyFbo();
 }
 
 bool MainMenu::loadBackground(const std::string& pngPath) {
@@ -322,14 +350,191 @@ void MainMenu::drawTexturedRect(float x, float y, float w, float h, GLuint tex) 
   glDisable(GL_TEXTURE_2D);
 }
 
-void MainMenu::drawBackground(int screenW, int screenH) {
-  if (bgLoaded && bgTex) {
-    drawTexturedRect(0, 0, (float)screenW, (float)screenH, bgTex);
-    // Soft darken so menu chrome stays readable
-    drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.42f);
-  } else {
-    drawRect(0, 0, (float)screenW, (float)screenH, 0.02f, 0.03f, 0.07f, 0.92f);
+void MainMenu::ensureFbo(int w, int h) {
+  if (w < 1) w = 1;
+  if (h < 1) h = 1;
+  if (fbo_ && fboW_ == w && fboH_ == h) return;
+  destroyFbo();
+  fboW_ = w;
+  fboH_ = h;
+  glGenFramebuffers(1, &fbo_);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+  glGenTextures(1, &fboColor_);
+  glBindTexture(GL_TEXTURE_2D, fboColor_);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fboColor_, 0);
+  glGenRenderbuffers(1, &fboDepth_);
+  glBindRenderbuffer(GL_RENDERBUFFER, fboDepth_);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, fboDepth_);
+  GLenum st = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+  if (st != GL_FRAMEBUFFER_COMPLETE) {
+    std::cerr << "[MainMenu] FBO incomplete: 0x" << std::hex << st << std::dec << "\n";
   }
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
+void MainMenu::updateParallax(float dt) {
+  motionT_ += dt;
+  // Subtle camera pan + plane tilt (radians)
+  camPanX_ = 0.12f * std::sin(motionT_ * 0.22f);
+  camPanY_ = 0.09f * std::cos(motionT_ * 0.17f);
+  planeTiltX_ = 0.035f * std::sin(motionT_ * 0.19f + 0.4f); // pitch
+  planeTiltY_ = 0.045f * std::cos(motionT_ * 0.15f);        // yaw
+}
+
+void MainMenu::drawParallaxScene(int screenW, int screenH) {
+  ncaResetPipelineState();
+  glViewport(0, 0, screenW, screenH);
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LEQUAL);
+  glDisable(GL_CULL_FACE);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glClearColor(0.02f, 0.03f, 0.06f, 1.f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  float aspect = (screenH > 0) ? (float)screenW / (float)screenH : 1.777f;
+  auto proj = getPerspectiveProjMatrix(fovYDeg_, aspect, 0.1f, 50.f);
+  Vector3f eye = {camPanX_, camPanY_, 0.15f};
+  Vector3f center = {
+    0.35f * planeTiltY_ + 0.05f * std::sin(motionT_ * 0.11f),
+    -0.25f * planeTiltX_ + 0.04f * std::cos(motionT_ * 0.13f),
+    menuPlaneZ_ * 0.5f
+  };
+  Vector3f up = {0.f, 1.f, 0.f};
+  auto view = getLookAtMatrix(eye, center, up);
+
+  glMatrixMode(GL_PROJECTION);
+  glLoadMatrixf(proj.data());
+  glMatrixMode(GL_MODELVIEW);
+
+  auto drawPlane = [&](float z, float scale, GLuint tex, bool hasTex, float darken) {
+    // Plane size so it slightly overfills the FOV at |z|
+    float dist = std::fabs(z - eye.z);
+    float halfH = dist * std::tan(0.5f * fovYDeg_ * (float)M_PI / 180.f) * scale;
+    float halfW = halfH * aspect;
+    glLoadIdentity();
+    glMultMatrixf(view.data());
+    // Shared rig tilt (attached planes)
+    glRotatef(planeTiltY_ * 180.f / (float)M_PI, 0.f, 1.f, 0.f);
+    glRotatef(planeTiltX_ * 180.f / (float)M_PI, 1.f, 0.f, 0.f);
+    glTranslatef(0.f, 0.f, z);
+
+    if (hasTex && tex) {
+      glEnable(GL_TEXTURE_2D);
+      glBindTexture(GL_TEXTURE_2D, tex);
+      glColor4f(1.f, 1.f, 1.f, 1.f);
+    } else {
+      glDisable(GL_TEXTURE_2D);
+      glColor4f(0.05f, 0.07f, 0.12f, 1.f);
+    }
+    glBegin(GL_QUADS);
+    // Y-up world; V flipped so UI FBO (top-left origin) maps correctly
+    glTexCoord2f(0.f, 0.f); glVertex3f(-halfW, -halfH, 0.f);
+    glTexCoord2f(1.f, 0.f); glVertex3f( halfW, -halfH, 0.f);
+    glTexCoord2f(1.f, 1.f); glVertex3f( halfW,  halfH, 0.f);
+    glTexCoord2f(0.f, 1.f); glVertex3f(-halfW,  halfH, 0.f);
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
+
+    if (darken > 0.f) {
+      glColor4f(0.02f, 0.03f, 0.07f, darken);
+      glBegin(GL_QUADS);
+      glVertex3f(-halfW, -halfH, 0.001f);
+      glVertex3f( halfW, -halfH, 0.001f);
+      glVertex3f( halfW,  halfH, 0.001f);
+      glVertex3f(-halfW,  halfH, 0.001f);
+      glEnd();
+    }
+  };
+
+  // Far art plane (oversize), then near UI plane
+  drawPlane(bgPlaneZ_, 1.22f, bgTex, bgLoaded, 0.35f);
+  if (fboColor_)
+    drawPlane(menuPlaneZ_, 1.0f, fboColor_, true, 0.f);
+
+  ncaResetPipelineState();
+  glDisable(GL_DEPTH_TEST);
+}
+
+bool MainMenu::projectMouseToUi(float mx, float my, float& uiX, float& uiY) const {
+  if (lastW < 1 || lastH < 1) return false;
+  float aspect = (float)lastW / (float)lastH;
+  float fovY = fovYDeg_ * (float)M_PI / 180.f;
+  float tanHalf = std::tan(0.5f * fovY);
+
+  // NDC (y up)
+  float ndcX = (2.f * mx / (float)lastW) - 1.f;
+  float ndcY = 1.f - (2.f * my / (float)lastH);
+
+  Vector3f eye = {camPanX_, camPanY_, 0.15f};
+  Vector3f center = {
+    0.35f * planeTiltY_ + 0.05f * std::sin(motionT_ * 0.11f),
+    -0.25f * planeTiltX_ + 0.04f * std::cos(motionT_ * 0.13f),
+    menuPlaneZ_ * 0.5f
+  };
+  Vector3f up = {0.f, 1.f, 0.f};
+  // Camera basis
+  Vector3f f = {center.x - eye.x, center.y - eye.y, center.z - eye.z};
+  float fl = std::sqrt(f.x*f.x + f.y*f.y + f.z*f.z) + 1e-8f;
+  f.x /= fl; f.y /= fl; f.z /= fl;
+  // s = f × up
+  Vector3f s = {f.y*up.z - f.z*up.y, f.z*up.x - f.x*up.z, f.x*up.y - f.y*up.x};
+  float sl = std::sqrt(s.x*s.x + s.y*s.y + s.z*s.z) + 1e-8f;
+  s.x /= sl; s.y /= sl; s.z /= sl;
+  // u = s × f
+  Vector3f u = {s.y*f.z - s.z*f.y, s.z*f.x - s.x*f.z, s.x*f.y - s.y*f.x};
+
+  Vector3f dir = {
+    s.x * (ndcX * aspect * tanHalf) + u.x * (ndcY * tanHalf) + f.x,
+    s.y * (ndcX * aspect * tanHalf) + u.y * (ndcY * tanHalf) + f.y,
+    s.z * (ndcX * aspect * tanHalf) + u.z * (ndcY * tanHalf) + f.z
+  };
+  float dl = std::sqrt(dir.x*dir.x + dir.y*dir.y + dir.z*dir.z) + 1e-8f;
+  dir.x /= dl; dir.y /= dl; dir.z /= dl;
+
+  // Menu plane: z = menuPlaneZ_ after tilt (approx unrotated plane, then inverse tilt)
+  // Work in rig space: transform ray into untilted plane frame
+  float cy = std::cos(-planeTiltY_), sy = std::sin(-planeTiltY_);
+  float cx = std::cos(-planeTiltX_), sx = std::sin(-planeTiltX_);
+  // Inverse yaw then inverse pitch on origin-relative eye/dir
+  auto rotY = [&](float x, float y, float z, float& ox, float& oy, float& oz) {
+    ox = cy * x + sy * z; oy = y; oz = -sy * x + cy * z;
+  };
+  auto rotX = [&](float x, float y, float z, float& ox, float& oy, float& oz) {
+    ox = x; oy = cx * y - sx * z; oz = sx * y + cx * z;
+  };
+  float ex, ey, ez, dx, dy, dz, tx, ty, tz;
+  rotY(eye.x, eye.y, eye.z, tx, ty, tz);
+  rotX(tx, ty, tz, ex, ey, ez);
+  rotY(dir.x, dir.y, dir.z, tx, ty, tz);
+  rotX(tx, ty, tz, dx, dy, dz);
+
+  if (std::fabs(dz) < 1e-6f) return false;
+  float t = (menuPlaneZ_ - ez) / dz;
+  if (t < 0.f) return false;
+  float px = ex + t * dx;
+  float py = ey + t * dy;
+
+  float dist = std::fabs(menuPlaneZ_ - 0.15f);
+  float halfH = dist * tanHalf * 1.0f;
+  float halfW = halfH * aspect;
+  if (px < -halfW || px > halfW || py < -halfH || py > halfH) return false;
+
+  // Map plane X/Y (Y up) → UI pixels (Y down)
+  float uu = (px + halfW) / (2.f * halfW);
+  float vv = (halfH - py) / (2.f * halfH); // 0 top
+  uiX = uu * (float)lastW;
+  uiY = vv * (float)lastH;
+  return true;
 }
 
 void MainMenu::drawText(float x, float y, const char* text,
@@ -475,27 +680,16 @@ void MainMenu::drawHostDialog() {
     drawButton(popupButtons[i], i == hoverPopupBtn);
 }
 
-void MainMenu::draw(int screenW, int screenH) {
-  if (!visible) return;
-  layout(screenW, screenH);
-  blinkT += 0.016f;
-
+void MainMenu::drawUiContent(int screenW, int screenH) {
+  (void)screenW;
+  (void)screenH;
   glUseProgram(0);
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-  glMatrixMode(GL_PROJECTION);
-  glPushMatrix();
-  glLoadIdentity();
-  glOrtho(0, screenW, screenH, 0, -1, 1);
-  glMatrixMode(GL_MODELVIEW);
-  glPushMatrix();
-  glLoadIdentity();
-
-  drawBackground(screenW, screenH);
-  // Semi-transparent menu panel so art shows through a little
+  // Semi-transparent menu panel (art is on the far 3D plane)
   drawRect(panelX, panelY, panelW, panelH, 0.05f, 0.07f, 0.12f, 0.88f);
   glColor4f(0.35f, 0.75f, 1.f, 0.9f);
   glBegin(GL_LINE_LOOP);
@@ -565,16 +759,43 @@ void MainMenu::draw(int screenW, int screenH) {
 
   if (quitConfirmOpen_)
     drawQuitConfirm();
+}
 
-  glPopMatrix();
+void MainMenu::draw(int screenW, int screenH) {
+  if (!visible) return;
+  layout(screenW, screenH);
+  blinkT += 0.016f;
+  updateParallax(0.016f);
+
+  ensureFbo(screenW, screenH);
+
+  // --- Pass 1: UI into transparent FBO ---
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+  glViewport(0, 0, screenW, screenH);
+  glClearColor(0.f, 0.f, 0.f, 0.f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
   glMatrixMode(GL_PROJECTION);
-  glPopMatrix();
+  glLoadIdentity();
+  glOrtho(0, screenW, screenH, 0, -1, 1);
   glMatrixMode(GL_MODELVIEW);
-  glEnable(GL_DEPTH_TEST);
+  glLoadIdentity();
+  drawUiContent(screenW, screenH);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+  // --- Pass 2: 3D parallax stage ---
+  drawParallaxScene(screenW, screenH);
 }
 
 bool MainMenu::onMouseMove(float mx, float my) {
   if (!visible) return false;
+  float uiX = mx, uiY = my;
+  if (!projectMouseToUi(mx, my, uiX, uiY)) {
+    hoverBtn = hoverRoom = hoverPopupBtn = hoverQuitBtn = -1;
+    return true;
+  }
+  mx = uiX;
+  my = uiY;
   if (quitConfirmOpen_) {
     hoverQuitBtn = hitQuitYes(mx, my) ? 0 : (hitQuitNo(mx, my) ? 1 : -1);
     hoverBtn = -1;
@@ -599,6 +820,12 @@ bool MainMenu::onMouseButton(int button, int action, float mx, float my) {
   if (!visible) return false;
   if (button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS)
     return true;
+
+  float uiX = mx, uiY = my;
+  if (!projectMouseToUi(mx, my, uiX, uiY))
+    return true;
+  mx = uiX;
+  my = uiY;
 
   // Quit confirmation captures all clicks
   if (quitConfirmOpen_) {

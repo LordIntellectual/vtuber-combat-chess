@@ -1178,97 +1178,102 @@ int main(int argc, char** argv) {
     };
     light.viewMatrix = getLookAtMatrix(lightPosition, {0, 0, 0}, {0, 0, 1});
 
-    camera->update();
-    // Action cam follows after user orbit so RMB/zoom stay relative to the piece
-    actionCam.update(camera, game, physicsWorld, dt);
-
-    // Gate engine-suggested move pulse (Gameplay setting; live mid-game toggle)
-    Vector2i sugSaveS = game->suggestedUserMoveStartPosition;
-    Vector2i sugSaveE = game->suggestedUserMoveEndPosition;
-    if (!settings.suggestedMovesEnabled()) {
-      game->suggestedUserMoveStartPosition = {-1, -1};
-      game->suggestedUserMoveEndPosition = {-1, -1};
-    }
-
-    shadowMapping->renderShadowMap(game, &pieces, &programs, &light, elapsedTime);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    // Shadow / previous frame smoke may leave program, multitex, instancing dirty.
-    ncaResetPipelineState();
-
-    glClearColor(th.clearBottom.x, th.clearBottom.y, th.clearBottom.z, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glViewport(0, 0, width, height);
-
-    // Starship: full sky-sphere universe + star. Other themes: simple gradient.
-    if (themes.activeId() == THEME_STARSHIP && starfield.ready()) {
-      starfield.drawWorld(camera);
-    } else {
-      drawSkyGradient(th);
-    }
-
-    Vector3f shake = (themes.activeId() == THEME_STARSHIP && starfield.ready())
-      ? starfield.boardShake() : Vector3f(0,0,0);
-    // Capture explosion shake (all themes) — stacked on ambient starship rattle
-    Vector3f capShake = captureShake.offset();
-    shake.x += capShake.x;
-    shake.y += capShake.y;
-    shake.z += capShake.z;
-    float hover = (themes.activeId() == THEME_STARSHIP && starfield.ready())
-      ? starfield.boardHoverZ() : 0.f;
-
-    // Pieces need a clean program/texture unit state after sky GLSL env pass.
-    ncaResetPipelineState();
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
-
     float outlineF = settings.outlineFactor();
-    std::string activeSet = pieceSets.current().id;
+    const Theme& thRender = th;
 
-    // Neon move particles act as dynamic point lights on board/pieces
-    Vector3f neonPos[SparkSystem::MAX_POINT_LIGHTS];
-    Vector3f neonCol[SparkSystem::MAX_POINT_LIGHTS];
-    float neonInt[SparkSystem::MAX_POINT_LIGHTS];
-    int neonCount = 0;
-    if (th.moveParticleStyle == MOVE_PARTICLE_NEON) {
-      sparks.gatherNeonLights(
-        neonPos, neonCol, neonInt, SparkSystem::MAX_POINT_LIGHTS, &neonCount);
+    if (!mainMenu.isVisible()) {
+      camera->update();
+      // Action cam follows after user orbit so RMB/zoom stay relative to the piece
+      actionCam.update(camera, game, physicsWorld, dt);
+
+      // Gate engine-suggested move pulse (Gameplay setting; live mid-game toggle)
+      Vector2i sugSaveS = game->suggestedUserMoveStartPosition;
+      Vector2i sugSaveE = game->suggestedUserMoveEndPosition;
+      if (!settings.suggestedMovesEnabled()) {
+        game->suggestedUserMoveStartPosition = {-1, -1};
+        game->suggestedUserMoveEndPosition = {-1, -1};
+      }
+
+      shadowMapping->renderShadowMap(game, &pieces, &programs, &light, elapsedTime);
+
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      // Shadow / previous frame smoke may leave program, multitex, instancing dirty.
+      ncaResetPipelineState();
+
+      glClearColor(thRender.clearBottom.x, thRender.clearBottom.y, thRender.clearBottom.z, 1);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glViewport(0, 0, width, height);
+
+      // Starship: full sky-sphere universe + star. Other themes: simple gradient.
+      if (themes.activeId() == THEME_STARSHIP && starfield.ready()) {
+        starfield.drawWorld(camera);
+      } else {
+        drawSkyGradient(thRender);
+      }
+
+      Vector3f shake = (themes.activeId() == THEME_STARSHIP && starfield.ready())
+        ? starfield.boardShake() : Vector3f(0,0,0);
+      // Capture explosion shake (all themes) — stacked on ambient starship rattle
+      Vector3f capShake = captureShake.offset();
+      shake.x += capShake.x;
+      shake.y += capShake.y;
+      shake.z += capShake.z;
+      float hover = (themes.activeId() == THEME_STARSHIP && starfield.ready())
+        ? starfield.boardHoverZ() : 0.f;
+
+      // Pieces need a clean program/texture unit state after sky GLSL env pass.
+      ncaResetPipelineState();
+      glEnable(GL_CULL_FACE);
+      glEnable(GL_DEPTH_TEST);
+
+      std::string activeSet = pieceSets.current().id;
+
+      // Neon move particles act as dynamic point lights on board/pieces
+      Vector3f neonPos[SparkSystem::MAX_POINT_LIGHTS];
+      Vector3f neonCol[SparkSystem::MAX_POINT_LIGHTS];
+      float neonInt[SparkSystem::MAX_POINT_LIGHTS];
+      int neonCount = 0;
+      if (thRender.moveParticleStyle == MOVE_PARTICLE_NEON) {
+        sparks.gatherNeonLights(
+          neonPos, neonCol, neonInt, SparkSystem::MAX_POINT_LIGHTS, &neonCount);
+      }
+
+      celShadingRender(
+        game, physicsWorld, &pieces, &programs, shadowMapping, camera, &light,
+        elapsedTime, thRender, shake, hover, outlineF, &transforms, &activeSet,
+        neonPos, neonCol, neonInt, neonCount,
+        settings.outlineWhiteR(), settings.outlineWhiteG(), settings.outlineWhiteB(),
+        settings.outlineBlackR(), settings.outlineBlackG(), settings.outlineBlackB());
+
+      // Restore suggestion coords so next AI move still has data when re-enabled
+      game->suggestedUserMoveStartPosition = sugSaveS;
+      game->suggestedUserMoveEndPosition = sugSaveE;
+
+      ncaResetPipelineState();
+      glEnable(GL_DEPTH_TEST);
+
+      // Smoke only for non-neon themes / fragment debris; sparks always (incl. neon)
+      smokeGenerator->draw(camera);
+      sparks.draw(camera);
+
+      ncaResetPipelineState();
+
+      // Screen flare after 3D (epilepsy-safe swell), then HUD on top
+      if (themes.activeId() == THEME_STARSHIP && starfield.ready()) {
+        starfield.drawScreenFlare(width, height);
+      }
+
+      // HUD only during play (menu has its own chrome)
+      if (gInGame) {
+        hud.draw(width, height, themes, game->isAiEnabled(), audio.musicEnabled(),
+                 &pieceSets);
+      }
     }
 
-    celShadingRender(
-      game, physicsWorld, &pieces, &programs, shadowMapping, camera, &light,
-      elapsedTime, th, shake, hover, outlineF, &transforms, &activeSet,
-      neonPos, neonCol, neonInt, neonCount,
-      settings.outlineWhiteR(), settings.outlineWhiteG(), settings.outlineWhiteB(),
-      settings.outlineBlackR(), settings.outlineBlackG(), settings.outlineBlackB());
-
-    // Restore suggestion coords so next AI move still has data when re-enabled
-    game->suggestedUserMoveStartPosition = sugSaveS;
-    game->suggestedUserMoveEndPosition = sugSaveE;
-
-    ncaResetPipelineState();
-    glEnable(GL_DEPTH_TEST);
-
-    // Smoke only for non-neon themes / fragment debris; sparks always (incl. neon)
-    smokeGenerator->draw(camera);
-    sparks.draw(camera);
-
-    ncaResetPipelineState();
-
-    // Screen flare after 3D (epilepsy-safe swell), then HUD on top
-    if (themes.activeId() == THEME_STARSHIP && starfield.ready()) {
-      starfield.drawScreenFlare(width, height);
-    }
-
-    // HUD only during play (menu has its own chrome)
-    if (gInGame && !mainMenu.isVisible()) {
-      hud.draw(width, height, themes, game->isAiEnabled(), audio.musicEnabled(),
-               &pieceSets);
-    }
     mainMenu.draw(width, height);
     settings.draw(width, height);
     if (pieceEditor.isOpen())
-      pieceEditor.draw(width, height, &programs, th, outlineF);
+      pieceEditor.draw(width, height, &programs, thRender, outlineF);
     if (gInGame) victory.draw(width, height);
 
     glfwSwapBuffers(window);

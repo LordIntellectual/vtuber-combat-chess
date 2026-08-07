@@ -7,8 +7,9 @@
 #include "../Network/LobbyClient.hxx"
 
 /**
- * Post-splash main menu: Single Player, Multiplayer (online rooms), Settings.
- * Host name/password live in a popup after "Host Online Room".
+ * Post-splash main menu with optional 3D parallax stage (root + multiplayer).
+ * UI is laid out in screen pixels, rendered to an FBO, then drawn on a near
+ * transparent plane; art sits on a larger far plane. Mouse hits use ray–plane.
  */
 class MainMenu {
 public:
@@ -21,7 +22,7 @@ public:
     ACTION_NONE = 0,
     ACTION_SINGLE_PLAYER = 1,
     ACTION_OPEN_SETTINGS = 2,
-    ACTION_HOST_ONLINE = 3,   // create room (from host popup Create)
+    ACTION_HOST_ONLINE = 3,
     ACTION_JOIN_ONLINE = 4,
     ACTION_QUIT = 5,
     ACTION_REFRESH_ROOMS = 6
@@ -36,7 +37,6 @@ public:
   Page page() const { return page_; }
   bool hostDialogOpen() const { return hostDialogOpen_; }
 
-  /** Load full-screen menu art (PNG). Safe to call once after GL is ready. */
   bool loadBackground(const std::string& pngPath);
 
   void draw(int screenW, int screenH);
@@ -71,9 +71,9 @@ private:
   int hoverBtn;
   int hoverRoom;
   int hoverPopupBtn;
-  int hoverQuitBtn; // 0 yes, 1 no, -1 none
+  int hoverQuitBtn;
   int selectedRoom_;
-  int focusField; // 0 none, 1 hostName, 2 hostPass, 3 joinPass
+  int focusField;
   std::string hostName;
   std::string hostPass;
   std::string joinPass;
@@ -83,6 +83,18 @@ private:
   LobbyClient lobby_;
   GLuint bgTex;
   bool bgLoaded;
+
+  // Parallax / FBO
+  GLuint fbo_;
+  GLuint fboColor_;
+  GLuint fboDepth_;
+  int fboW_, fboH_;
+  float motionT_;
+  float camPanX_, camPanY_;
+  float planeTiltX_, planeTiltY_; // radians, subtle
+  float menuPlaneZ_;
+  float bgPlaneZ_;
+  float fovYDeg_;
 
   float panelX, panelY, panelW, panelH;
   static const int kMaxButtons = 10;
@@ -100,12 +112,10 @@ private:
   float listX, listY, listW, listH;
   float rowH;
 
-  // Host dialog popup geometry
   float dlgX, dlgY, dlgW, dlgH;
   float hnX, hnY, hnW, hnH;
   float hpX, hpY, hpW, hpH;
 
-  // Quit confirmation (Main Menu → Quit)
   float quitPanelX, quitPanelY, quitPanelW, quitPanelH;
   float quitYesX, quitYesY, quitYesW, quitYesH;
   float quitNoX, quitNoY, quitNoW, quitNoH;
@@ -137,7 +147,13 @@ private:
                  bool focused, const char* placeholder);
   void drawHostDialog();
   void drawQuitConfirm();
-  void drawBackground(int screenW, int screenH);
+  void drawUiContent(int screenW, int screenH);
+  void ensureFbo(int w, int h);
+  void destroyFbo();
+  void updateParallax(float dt);
+  void drawParallaxScene(int screenW, int screenH);
+  /** Map window mouse → layout UI pixels via ray vs menu plane. */
+  bool projectMouseToUi(float mx, float my, float& uiX, float& uiY) const;
 };
 
 #endif
