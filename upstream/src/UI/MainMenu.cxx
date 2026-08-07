@@ -193,26 +193,30 @@ void MainMenu::layout(int w, int h) {
   lastW = w;
   lastH = h;
   if (page_ == PAGE_ROOT) {
-    panelW = 520.f;
-    panelH = 420.f;
-  } else {
-    panelW = std::min(720.f, (float)w - 40.f);
-    panelH = std::min(520.f, (float)h - 40.f);
-  }
-  panelX = (w - panelW) * 0.5f;
-  panelY = (h - panelH) * 0.5f;
-
-  if (page_ == PAGE_ROOT) {
+    // Fit the panel snugly around fixed-size buttons (shrink box, not stretch buttons).
     const float btnW = 320.f, btnH = 48.f, gap = 16.f;
-    float y = panelY + 100.f;
+    const float padX = 24.f;   // was ~100px empty each side of 320@520
+    const float padTop = 78.f; // title + "Main Menu" only
+    const float padBot = 36.f; // foot + optional status line (drawn at H-28)
+    const float stackH = (float)buttonCount * btnH
+                       + (float)std::max(0, buttonCount - 1) * gap;
+    panelW = btnW + padX * 2.f;
+    panelH = padTop + stackH + padBot;
+    panelX = (w - panelW) * 0.5f;
+    panelY = (h - panelH) * 0.5f;
+    float y = panelY + padTop;
     for (int i = 0; i < buttonCount; ++i) {
       buttons[i].w = btnW;
       buttons[i].h = btnH;
-      buttons[i].x = panelX + (panelW - btnW) * 0.5f;
+      buttons[i].x = panelX + padX;
       buttons[i].y = y;
       y += btnH + gap;
     }
   } else {
+    panelW = std::min(720.f, (float)w - 40.f);
+    panelH = std::min(520.f, (float)h - 40.f);
+    panelX = (w - panelW) * 0.5f;
+    panelY = (h - panelH) * 0.5f;
     // Multiplayer: list + join password + action buttons (no host fields)
     float y = panelY + 70.f;
     listX = panelX + 24.f;
