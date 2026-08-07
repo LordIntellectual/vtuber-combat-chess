@@ -13,12 +13,14 @@
 MainMenu::MainMenu()
   : visible(false),
     hostDialogOpen_(false),
+    quitConfirmOpen_(false),
     page_(PAGE_ROOT),
     pending(ACTION_NONE),
     lastW(1280), lastH(720),
     hoverBtn(-1),
     hoverRoom(-1),
     hoverPopupBtn(-1),
+    hoverQuitBtn(-1),
     selectedRoom_(-1),
     focusField(0),
     hostName("Stream Match"),
@@ -33,7 +35,10 @@ MainMenu::MainMenu()
     rowH(28.f),
     dlgX(0), dlgY(0), dlgW(0), dlgH(0),
     hnX(0), hnY(0), hnW(0), hnH(0),
-    hpX(0), hpY(0), hpW(0), hpH(0) {
+    hpX(0), hpY(0), hpW(0), hpH(0),
+    quitPanelX(0), quitPanelY(0), quitPanelW(440), quitPanelH(200),
+    quitYesX(0), quitYesY(0), quitYesW(150), quitYesH(42),
+    quitNoX(0), quitNoY(0), quitNoW(150), quitNoH(42) {
   rebuild();
 }
 
@@ -74,6 +79,7 @@ void MainMenu::show() {
   pending = ACTION_NONE;
   focusField = 0;
   hostDialogOpen_ = false;
+  quitConfirmOpen_ = false;
   statusLine.clear();
   rebuild();
 }
@@ -83,10 +89,12 @@ void MainMenu::hide() {
   pending = ACTION_NONE;
   focusField = 0;
   hostDialogOpen_ = false;
+  quitConfirmOpen_ = false;
 }
 
 void MainMenu::openHostDialog() {
   hostDialogOpen_ = true;
+  quitConfirmOpen_ = false;
   focusField = 1; // room name
   hoverPopupBtn = -1;
   if (hostName.empty()) hostName = "Stream Match";
@@ -96,6 +104,18 @@ void MainMenu::closeHostDialog() {
   hostDialogOpen_ = false;
   focusField = 0;
   hoverPopupBtn = -1;
+}
+
+void MainMenu::openQuitConfirm() {
+  quitConfirmOpen_ = true;
+  hostDialogOpen_ = false;
+  focusField = 0;
+  hoverQuitBtn = -1;
+}
+
+void MainMenu::closeQuitConfirm() {
+  quitConfirmOpen_ = false;
+  hoverQuitBtn = -1;
 }
 
 void MainMenu::setRooms(const std::vector<LobbyRoom>& rooms) {
@@ -212,6 +232,24 @@ void MainMenu::layout(int w, int h) {
   popupButtons[1].h = pbH;
   popupButtons[1].x = startX + pbW + gapB;
   popupButtons[1].y = pby;
+
+  // Quit confirmation centered
+  quitPanelW = 440.f;
+  quitPanelH = 200.f;
+  quitPanelX = (w - quitPanelW) * 0.5f;
+  quitPanelY = (h - quitPanelH) * 0.5f;
+  quitYesW = 150.f;
+  quitYesH = 42.f;
+  quitNoW = 150.f;
+  quitNoH = 42.f;
+  {
+    const float gap = 24.f;
+    const float total = quitYesW + gap + quitNoW;
+    quitYesX = quitPanelX + (quitPanelW - total) * 0.5f;
+    quitNoX = quitYesX + quitYesW + gap;
+    quitYesY = quitPanelY + quitPanelH - 62.f;
+    quitNoY = quitYesY;
+  }
 }
 
 int MainMenu::hitButton(float mx, float my) const {
@@ -357,6 +395,58 @@ void MainMenu::drawField(float x, float y, float w, float h, const std::string& 
   }
 }
 
+bool MainMenu::hitQuitYes(float mx, float my) const {
+  return mx >= quitYesX && mx <= quitYesX + quitYesW &&
+         my >= quitYesY && my <= quitYesY + quitYesH;
+}
+
+bool MainMenu::hitQuitNo(float mx, float my) const {
+  return mx >= quitNoX && mx <= quitNoX + quitNoW &&
+         my >= quitNoY && my <= quitNoY + quitNoH;
+}
+
+void MainMenu::drawQuitConfirm() {
+  drawRect(0, 0, (float)lastW, (float)lastH, 0.f, 0.f, 0.f, 0.55f);
+  drawRect(quitPanelX, quitPanelY, quitPanelW, quitPanelH, 0.08f, 0.09f, 0.14f, 0.98f);
+
+  glColor4f(1.f, 0.45f, 0.35f, 0.95f);
+  glBegin(GL_LINE_LOOP);
+  glVertex2f(quitPanelX, quitPanelY);
+  glVertex2f(quitPanelX + quitPanelW, quitPanelY);
+  glVertex2f(quitPanelX + quitPanelW, quitPanelY + quitPanelH);
+  glVertex2f(quitPanelX, quitPanelY + quitPanelH);
+  glEnd();
+
+  drawText(quitPanelX + 28, quitPanelY + 28, "QUIT", 1.f, 0.55f, 0.4f, 2.0f);
+  drawText(quitPanelX + 28, quitPanelY + 72,
+           "Are you sure you want to quit?",
+           0.9f, 0.92f, 1.f, 1.35f);
+
+  bool yesHov = hoverQuitBtn == 0;
+  bool noHov = hoverQuitBtn == 1;
+  drawRect(quitYesX, quitYesY, quitYesW, quitYesH,
+           yesHov ? 0.55f : 0.45f, 0.15f, 0.15f, 1.f);
+  glColor4f(1.f, 0.5f, 0.45f, 1.f);
+  glBegin(GL_LINE_LOOP);
+  glVertex2f(quitYesX, quitYesY);
+  glVertex2f(quitYesX + quitYesW, quitYesY);
+  glVertex2f(quitYesX + quitYesW, quitYesY + quitYesH);
+  glVertex2f(quitYesX, quitYesY + quitYesH);
+  glEnd();
+  drawText(quitYesX + 50.f, quitYesY + 12.f, "Yes", 1.f, 0.9f, 0.9f, 1.6f);
+
+  drawRect(quitNoX, quitNoY, quitNoW, quitNoH,
+           0.12f, noHov ? 0.35f : 0.28f, 0.2f, 1.f);
+  glColor4f(0.4f, 1.f, 0.65f, 1.f);
+  glBegin(GL_LINE_LOOP);
+  glVertex2f(quitNoX, quitNoY);
+  glVertex2f(quitNoX + quitNoW, quitNoY);
+  glVertex2f(quitNoX + quitNoW, quitNoY + quitNoH);
+  glVertex2f(quitNoX, quitNoY + quitNoH);
+  glEnd();
+  drawText(quitNoX + 55.f, quitNoY + 12.f, "No", 0.9f, 1.f, 0.95f, 1.6f);
+}
+
 void MainMenu::drawHostDialog() {
   // Dim multiplayer panel further
   drawRect(0, 0, (float)lastW, (float)lastH, 0.0f, 0.0f, 0.0f, 0.45f);
@@ -467,10 +557,13 @@ void MainMenu::draw(int screenW, int screenH) {
       drawHostDialog();
   }
 
-  if (!statusLine.empty() && !hostDialogOpen_) {
+  if (!statusLine.empty() && !hostDialogOpen_ && !quitConfirmOpen_) {
     drawText(panelX + 24, panelY + panelH - 28, statusLine.c_str(),
              1.f, 0.75f, 0.4f, 1.15f);
   }
+
+  if (quitConfirmOpen_)
+    drawQuitConfirm();
 
   glPopMatrix();
   glMatrixMode(GL_PROJECTION);
@@ -481,6 +574,13 @@ void MainMenu::draw(int screenW, int screenH) {
 
 bool MainMenu::onMouseMove(float mx, float my) {
   if (!visible) return false;
+  if (quitConfirmOpen_) {
+    hoverQuitBtn = hitQuitYes(mx, my) ? 0 : (hitQuitNo(mx, my) ? 1 : -1);
+    hoverBtn = -1;
+    hoverRoom = -1;
+    hoverPopupBtn = -1;
+    return true;
+  }
   if (hostDialogOpen_) {
     hoverPopupBtn = hitPopupButton(mx, my);
     hoverBtn = -1;
@@ -488,6 +588,7 @@ bool MainMenu::onMouseMove(float mx, float my) {
     return true;
   }
   hoverPopupBtn = -1;
+  hoverQuitBtn = -1;
   hoverBtn = hitButton(mx, my);
   hoverRoom = hitRoom(mx, my);
   return true;
@@ -497,6 +598,20 @@ bool MainMenu::onMouseButton(int button, int action, float mx, float my) {
   if (!visible) return false;
   if (button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS)
     return true;
+
+  // Quit confirmation captures all clicks
+  if (quitConfirmOpen_) {
+    if (hitQuitYes(mx, my)) {
+      closeQuitConfirm();
+      pending = ACTION_QUIT;
+      return true;
+    }
+    if (hitQuitNo(mx, my)) {
+      closeQuitConfirm();
+      return true;
+    }
+    return true; // ignore outside clicks
+  }
 
   // Host dialog captures all clicks
   if (hostDialogOpen_) {
@@ -565,7 +680,7 @@ bool MainMenu::onMouseButton(int button, int action, float mx, float my) {
   if (id == (int)ACTION_SINGLE_PLAYER) pending = ACTION_SINGLE_PLAYER;
   else if (id == (int)ACTION_OPEN_SETTINGS) pending = ACTION_OPEN_SETTINGS;
   else if (id == (int)ACTION_JOIN_ONLINE) pending = ACTION_JOIN_ONLINE;
-  else if (id == (int)ACTION_QUIT) pending = ACTION_QUIT;
+  else if (id == (int)ACTION_QUIT) openQuitConfirm();
   return true;
 }
 
@@ -575,6 +690,10 @@ bool MainMenu::onKey(int key, int action, int mods) {
   if (action != GLFW_PRESS && action != GLFW_REPEAT) return false;
 
   if (key == GLFW_KEY_ESCAPE) {
+    if (quitConfirmOpen_) {
+      closeQuitConfirm();
+      return true;
+    }
     if (hostDialogOpen_) {
       closeHostDialog();
       return true;
@@ -586,7 +705,17 @@ bool MainMenu::onKey(int key, int action, int mods) {
       rebuild();
       return true;
     }
-    pending = ACTION_QUIT;
+    // Root: Esc opens quit confirmation (same as Quit button)
+    openQuitConfirm();
+    return true;
+  }
+
+  if (quitConfirmOpen_) {
+    if (key == GLFW_KEY_ENTER) {
+      closeQuitConfirm();
+      pending = ACTION_QUIT;
+      return true;
+    }
     return true;
   }
 
