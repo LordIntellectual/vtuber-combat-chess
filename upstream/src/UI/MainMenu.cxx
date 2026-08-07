@@ -399,32 +399,49 @@ void MainMenu::updateParallax(float dt) {
   planeTiltY_ = 0.030f * std::cos(motionT_ * 0.15f);
 }
 
-void MainMenu::respawnEffectParticle(EffectParticle& p, int w, int h, int edge) {
-  // edge: -1 random, 0 top, 1 left, 2 right, 3 bottom (spawn just outside)
-  if (edge < 0) edge = (int)(p.seed * 4.f) % 4;
-  const float margin = 8.f;
+void MainMenu::respawnEffectParticle(EffectParticle& p, int w, int h, int exitEdge) {
+  // Destroy particle that left the plane and birth a new one near the
+  // opposite edge, moving inward — continuous flow, no edge pile-up.
+  // exitEdge: 0 top, 1 left, 2 right, 3 bottom
+  // Re-hash seed so each life looks different (deterministic, no rand).
+  p.seed = std::fmod(p.seed * 1.6180339887f + 0.371f + motionT_ * 0.07f, 1.f);
+  if (p.seed < 0.f) p.seed += 1.f;
+
   p.size = 1.5f + std::fmod(p.seed * 17.3f, 3.5f);
   p.alpha = 0.45f + std::fmod(p.seed * 9.1f, 0.45f);
-  p.vx = 20.f + std::fmod(p.seed * 41.f, 55.f);
-  p.vy = 15.f + std::fmod(p.seed * 23.f, 40.f);
-  switch (edge) {
-    case 0: // from top
-      p.x = std::fmod(p.seed * 997.f, (float)w);
-      p.y = -margin - p.size;
+
+  // Spawn just inside the opposite edge so the flake is immediately visible
+  // and already travelling into the plane (not stuck outside the pad zone).
+  const float inset = 4.f + p.size;
+  const float speedIn = 40.f + std::fmod(p.seed * 41.f, 50.f);
+  const float drift = -20.f + std::fmod(p.seed * 53.f, 40.f); // lateral scatter
+
+  // opposite of exit
+  const int spawnEdge = (exitEdge + 2) % 4;
+  switch (spawnEdge) {
+    case 0: // enter from top (came off bottom)
+      p.x = std::fmod(p.seed * 997.f, (float)std::max(w, 1));
+      p.y = inset;
+      p.vx = drift;
+      p.vy = speedIn; // down (y-down ortho)
       break;
-    case 1: // from left
-      p.x = -margin - p.size;
-      p.y = std::fmod(p.seed * 773.f, (float)h);
+    case 1: // enter from left (came off right)
+      p.x = inset;
+      p.y = std::fmod(p.seed * 773.f, (float)std::max(h, 1));
+      p.vx = speedIn;
+      p.vy = drift;
       break;
-    case 2: // from right
-      p.x = (float)w + margin + p.size;
-      p.y = std::fmod(p.seed * 661.f, (float)h);
-      p.vx = -std::fabs(p.vx) * 0.6f;
+    case 2: // enter from right (came off left)
+      p.x = (float)w - inset;
+      p.y = std::fmod(p.seed * 661.f, (float)std::max(h, 1));
+      p.vx = -speedIn;
+      p.vy = drift;
       break;
-    default: // from bottom (rare upward drift)
-      p.x = std::fmod(p.seed * 883.f, (float)w);
-      p.y = (float)h + margin + p.size;
-      p.vy = -std::fabs(p.vy) * 0.5f;
+    default: // enter from bottom (came off top)
+      p.x = std::fmod(p.seed * 883.f, (float)std::max(w, 1));
+      p.y = (float)h - inset;
+      p.vx = drift;
+      p.vy = -speedIn; // up
       break;
   }
 }
@@ -506,16 +523,17 @@ void MainMenu::updateEffectLayer(float dt, int w, int h) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
 
-    // Wrap / respawn when far outside (no particle-particle collision)
-    const float pad = 24.f;
-    if (p.x < -pad) {
-      respawnEffectParticle(p, w, h, 1);
-    } else if (p.x > (float)w + pad) {
-      respawnEffectParticle(p, w, h, 2);
-    } else if (p.y < -pad) {
-      respawnEffectParticle(p, w, h, 0);
+    // Past plane bounds → destroy & spawn on the opposite end (no pile-up).
+    // Use particle half-size so the flake is fully off-screen before recycle.
+    const float pad = p.size + 2.f;
+    if (p.x > (float)w + pad) {
+      respawnEffectParticle(p, w, h, 2); // exited right → birth on left
+    } else if (p.x < -pad) {
+      respawnEffectParticle(p, w, h, 1); // exited left → birth on right
     } else if (p.y > (float)h + pad) {
-      respawnEffectParticle(p, w, h, 3);
+      respawnEffectParticle(p, w, h, 3); // exited bottom → birth on top
+    } else if (p.y < -pad) {
+      respawnEffectParticle(p, w, h, 0); // exited top → birth on bottom
     }
   }
 }

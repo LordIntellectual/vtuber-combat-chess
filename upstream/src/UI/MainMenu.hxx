@@ -176,7 +176,8 @@ private:
   void seedEffectParticles(int w, int h);
   void updateEffectLayer(float dt, int w, int h);
   void drawEffectLayer();
-  void respawnEffectParticle(EffectParticle& p, int w, int h, int edge);
+  /** Recycle particle that left exitEdge onto the opposite side of the plane. */
+  void respawnEffectParticle(EffectParticle& p, int w, int h, int exitEdge);
 };
 
 #endif

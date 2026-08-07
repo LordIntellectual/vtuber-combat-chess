@@ -97,7 +97,7 @@ framing (menu upper-right, hits still centre).
 |-------|-----------|
 | Uneven wind | Global wind from stacked sines of `motionT_`, plus spatial / per-particle phase gusts. Particles track toward wind velocity with light drag. |
 | Cursor repel | On mouse move, store screen `cursorX_/Y_`. Each particle within ~110 px is accelerated away; falloff is stronger near the cursor. |
-| Wrap | Leave screen → respawn from an edge. **No** particle–particle collision. |
+| Recycle | Leave plane bounds → **destroy** and birth a new flake on the **opposite** edge, moving inward (no edge pile-up). **No** particle–particle collision. |
 
 **Code:** `seedEffectParticles`, `updateEffectLayer`, `drawEffectLayer`, `respawnEffectParticle` in `MainMenu.cxx`. Count: `kMaxEffectParticles` (140). Reseed on `show()`.
 
