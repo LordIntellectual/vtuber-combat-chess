@@ -645,6 +645,12 @@ std::string ChessGame::consumeLocalMoveBroadcast(){
   return s;
 }
 
+bool ChessGame::consumeAnimationJustStarted(){
+  bool v = animationJustStarted_;
+  animationJustStarted_ = false;
+  return v;
+}
+
 bool ChessGame::beginAnimatedMove(Vector2i start, Vector2i end, int placedPiece,
                                   bool fromWhiteTurn){
   int piece = boardAt(start.x, start.y);
@@ -686,6 +692,7 @@ bool ChessGame::beginAnimatedMove(Vector2i start, Vector2i end, int placedPiece,
   state = fromWhiteTurn ? USER_MOVING : BLACK_MOVING;
   clock->restart();
   movePly += 1;
+  animationJustStarted_ = true;
   return true;
 }
 
@@ -752,6 +759,7 @@ void ChessGame::resetBoard(){
   movePly = 0;
   pendingMoveReq.clear();
   localMoveBroadcast.clear();
+  animationJustStarted_ = false;
   movingPiece = EMPTY;
   movingPiecePlaced = EMPTY;
   movingPiecePosition = {-1, -1};
@@ -1043,6 +1051,7 @@ void ChessGame::perform(){
     // Transition to AI_MOVING state
     state = AI_MOVING;
     clock->restart();
+    animationJustStarted_ = true;
   }
 };
 
