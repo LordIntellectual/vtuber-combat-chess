@@ -69,18 +69,37 @@ int PieceTransformStore::pieceTypeFromKey(const std::string& key) {
   return PAWN;
 }
 
+/** Built-in defaults when transforms.json is missing or omits a piece. */
+static void applyBuiltinTransformDefaults(
+    const std::string& setId, std::map<std::string, PieceTransform>& map) {
+  // vtuber_set_1 pawn mesh is authored large; default display scale 0.75
+  // (does not change the .obj — only the transform applied at render time).
+  if (setId == "vtuber_set_1") {
+    auto it = map.find("pawn");
+    if (it == map.end()) {
+      PieceTransform t;
+      t.scale = 0.75f;
+      map["pawn"] = t;
+    }
+  }
+}
+
 void PieceTransformStore::loadForSet(const std::string& setId, const std::string& setPath) {
   std::string path = setPath;
   if (!path.empty() && path.back() != '/') path.push_back('/');
   path += "transforms.json";
 
+  std::map<std::string, PieceTransform> map;
   std::ifstream in(path);
   if (!in) {
-    data[setId] = {};
+    applyBuiltinTransformDefaults(setId, map);
+    data[setId] = map;
+    if (!map.empty())
+      std::cout << "[Transforms] No file at " << path
+                << " — applied built-in defaults for " << setId << "\n";
     return;
   }
   std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  std::map<std::string, PieceTransform> map;
 
   for (const auto& key : allPieceKeys()) {
     std::string needle = "\"" + key + "\"";
@@ -102,6 +121,7 @@ void PieceTransformStore::loadForSet(const std::string& setId, const std::string
     t.scale = (sc > 1e-4f) ? sc : 1.f;
     map[key] = t;
   }
+  applyBuiltinTransformDefaults(setId, map);
   data[setId] = map;
   std::cout << "[Transforms] Loaded " << map.size() << " entries from " << path << "\n";
 }
