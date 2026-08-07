@@ -51,7 +51,7 @@ MainMenu::MainMenu()
     uiLayerPanY_(0.f),
     musicLevel_(0.f),
     musicBass_(0.f),
-    musicSensitivity_(0.4f),
+    musicSensitivity_(0.6f),
     pulseBright_(0.f),
     pulseScale_(1.f),
     effectCount_(0),
@@ -437,23 +437,23 @@ void MainMenu::updateMusicPulse(float dt) {
   if (drive < idle * 0.5f)
     drive = idle * 0.5f;
   pulseBright_ = drive;
-  // Size: up to 20% larger on hard hits
-  pulseScale_ = 1.f + 0.20f * drive;
+  // Size: up to 30% larger on hard hits
+  pulseScale_ = 1.f + 0.30f * drive;
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {
-  // Base red border (emissive with beat) — slightly thicker solid frame
+  // Base red border (emissive with beat) — solid frame + electric crackle
   float a = 0.75f + 0.25f * intensity;
   float er = 1.f;
   float eg = 0.22f + 0.20f * intensity;
   float eb = 0.28f + 0.15f * intensity;
   glDisable(GL_TEXTURE_2D);
-  const float thick = 2.5f + 1.5f * intensity; // solid edge thickness (px)
+  const float thick = 3.5f + 2.0f * intensity; // solid edge thickness (px)
   drawRect(x, y, w, thick, er, eg, eb, a);                    // top
   drawRect(x, y + h - thick, w, thick, er, eg, eb, a);        // bottom
   drawRect(x, y, thick, h, er, eg, eb, a);                    // left
   drawRect(x + w - thick, y, thick, h, er, eg, eb, a);        // right
-  glLineWidth(2.0f + 1.5f * intensity);
+  glLineWidth(2.5f + 2.0f * intensity);
   glColor4f(er, eg, eb, a);
   glBegin(GL_LINE_LOOP);
   glVertex2f(x, y);
@@ -464,7 +464,7 @@ void MainMenu::drawElectricBorder(float x, float y, float w, float h, float inte
 
   // Additive crackle / lightning along edges
   glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-  glLineWidth(1.5f);
+  glLineWidth(2.2f);
   const float t = motionT_;
   const int segs = 18;
   auto edgeBolt = [&](float x0, float y0, float x1, float y1, float nx, float ny, int edgeId) {
@@ -479,13 +479,13 @@ void MainMenu::drawElectricBorder(float x, float y, float w, float h, float inte
       float flick = std::sin(phase) * std::sin(phase * 1.7f + edgeId);
       float off = 0.f;
       if (flick > 0.15f) {
-        off = (flick - 0.15f) * (3.5f + 10.f * intensity)
+        off = (flick - 0.15f) * (4.5f + 14.f * intensity)
               * std::sin(phase * 3.3f + u * 20.f);
       }
       // Occasional long spike
       float spike = std::sin(t * 9.f + edgeId * 2.1f + u * 6.f);
       if (spike > 0.92f)
-        off += (spike - 0.92f) * 80.f * (0.4f + intensity);
+        off += (spike - 0.92f) * 100.f * (0.4f + intensity);
       float aa = (0.35f + 0.65f * intensity) * std::max(0.f, flick);
       // Mix red → purple along the arc
       float pr = 1.f;
@@ -904,8 +904,8 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     drawElectricBorder(b.x, b.y, b.w, b.h,
                        (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
   }
-  // Centered label, slightly larger than before
-  const float labelScale = 1.55f;
+  // Centered label
+  const float labelScale = 2.5f;
   float tw = stb_easy_font_width((char*)b.label) * labelScale;
   float th = 8.f * labelScale; // stb_easy_font baseline height ~8
   float tx = b.x + (b.w - tw) * 0.5f;
