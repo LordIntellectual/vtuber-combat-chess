@@ -1148,7 +1148,7 @@ int main(int argc, char** argv) {
         };
         // Per-theme move trail: smoke sprites vs neon energy cloud (space)
         if (th.moveParticleStyle == MOVE_PARTICLE_NEON) {
-          // White/user > 0 → blue; black/AI < 0 → red
+          // Side colours from theme (starship: white=red, black=purple)
           Vector3f neonCol = (game->movingPiece > 0)
             ? th.neonTrailUser : th.neonTrailAI;
           // Cloud each frame of the move lerp (billboard discs)

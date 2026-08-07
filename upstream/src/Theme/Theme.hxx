@@ -47,8 +47,8 @@ struct Theme {
   Vector3f sparkColor;
   Vector3f moveTrail;
   MoveParticleStyle moveParticleStyle;
-  Vector3f neonTrailUser; // white/player move glow (e.g. blue)
-  Vector3f neonTrailAI;   // black/AI move glow (e.g. red)
+  Vector3f neonTrailUser; // white/player move glow (starship: red)
+  Vector3f neonTrailAI;   // black/AI move glow (starship: purple)
 
   // Light
   Vector3f lightDir;
