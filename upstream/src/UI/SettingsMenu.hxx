@@ -85,6 +85,10 @@ public:
     menuPulseSens = std::max(0.f, std::min(1.f, v));
   }
 
+  /** Main Menu electric border / crackle FX (default on). Sound settings. */
+  bool menuElectricBordersEnabled() const { return menuElectric; }
+  void setMenuElectricBordersEnabled(bool v) { menuElectric = v; }
+
   bool pieceEditorOpen() const;
 
 private:
@@ -101,6 +105,7 @@ private:
     const char* label;
     float x, y, w, h;
     int action; // Page to open, -1 = back, -2 = action cam, -3 = suggested moves
+                // -4 = reset outline colours, -5 = menu electric toggle
                 // -10 = Return (close menu), -11 = Quit (confirm popup)
   };
 
@@ -126,7 +131,8 @@ private:
   float master;
   float music;
   float sfx;
-  float menuPulseSens; // 0..1 Main Menu bass-pulse strength
+  float menuPulseSens; // 0..1 Main Menu music-pulse strength
+  bool menuElectric;   // Main Menu electric border FX
   float outline; // 0..1 thickness control
   float outWhiteR, outWhiteG, outWhiteB;
   float outBlackR, outBlackG, outBlackB;

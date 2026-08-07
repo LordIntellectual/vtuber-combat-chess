@@ -49,6 +49,9 @@ public:
    * @param bass         optional low-band envelope (extra crackle spice)
    */
   void setMusicDrive(float level, float sensitivity, float bass = 0.f);
+  /** When false, Main Menu uses solid red borders without crackle FX. */
+  void setElectricBordersEnabled(bool on) { electricBorders_ = on; }
+  bool electricBordersEnabled() const { return electricBorders_; }
 
   void draw(int screenW, int screenH);
 
@@ -114,6 +117,7 @@ private:
   float musicSensitivity_; // 0..1 from Settings
   float pulseBright_; // 0..1 emissive boost
   float pulseScale_;  // 1 = rest size
+  bool electricBorders_;
 
   // Effect plane (between art and UI): red/purple ball-lightning particles
   static const int kMaxEffectParticles = 140;
@@ -187,6 +191,8 @@ private:
   void drawQuitConfirm();
   void drawUiContent(int screenW, int screenH);
   void drawElectricBorder(float x, float y, float w, float h, float intensity);
+  /** Solid red frame, or electric crackle when electricBorders_ is on. */
+  void drawMenuBorder(float x, float y, float w, float h, float intensity);
   void updateMusicPulse(float dt);
   void ensureFbo(int w, int h);
   void destroyFbo();
