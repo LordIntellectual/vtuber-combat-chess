@@ -54,7 +54,7 @@ MainMenu::MainMenu()
     pulseBright_(0.f),
     pulseScale_(1.f),
     electricBorders_(false),
-    pulseEnabled_(true),
+    pulseEnabled_(false),
     effectCount_(0),
     effectRedCount_(0),
     effectPurpleCount_(0),
@@ -448,30 +448,46 @@ void MainMenu::updateMusicPulse(float dt) {
 }
 
 void MainMenu::drawMenuBorder(float x, float y, float w, float h, float intensity) {
-  if (electricBorders_) {
+  // Responsive pulse uses heavier chrome so motion reads on stream.
+  // Static (pulse off) uses the lighter 3px look so the menu stays clean.
+  if (pulseEnabled_ && electricBorders_) {
     drawElectricBorder(x, y, w, h, intensity);
     return;
   }
-  // Solid red frame only (no crackle)
-  float a = 0.80f + 0.15f * intensity;
+
+  float a = pulseEnabled_ ? (0.80f + 0.15f * intensity) : 0.88f;
   float er = 1.f;
-  float eg = 0.25f + 0.12f * intensity;
-  float eb = 0.30f + 0.10f * intensity;
-  const float thick = 3.5f + 1.0f * intensity;
+  float eg = pulseEnabled_ ? (0.25f + 0.12f * intensity) : 0.28f;
+  float eb = pulseEnabled_ ? (0.30f + 0.10f * intensity) : 0.30f;
+  // Static: fixed 3px solid + 3px line. Responsive solid (no electric): thicker.
+  const float thick = pulseEnabled_ ? (3.5f + 2.0f * intensity) : 3.f;
+  const float lineW = pulseEnabled_ ? (2.5f + 2.0f * intensity) : 3.f;
+
+  glDisable(GL_TEXTURE_2D);
   drawRect(x, y, w, thick, er, eg, eb, a);
   drawRect(x, y + h - thick, w, thick, er, eg, eb, a);
   drawRect(x, y, thick, h, er, eg, eb, a);
   drawRect(x + w - thick, y, thick, h, er, eg, eb, a);
+  glLineWidth(lineW);
+  glColor4f(er, eg, eb, a);
+  glBegin(GL_LINE_LOOP);
+  glVertex2f(x, y);
+  glVertex2f(x + w, y);
+  glVertex2f(x + w, y + h);
+  glVertex2f(x, y + h);
+  glEnd();
+  glLineWidth(1.f);
+  glColor4f(1.f, 1.f, 1.f, 1.f);
 }
 
 void MainMenu::drawElectricBorder(float x, float y, float w, float h, float intensity) {
-  // Base red border (emissive with beat) — solid frame + electric crackle
+  // Responsive-only heavy chrome: thick solid frame + electric crackle
   float a = 0.75f + 0.25f * intensity;
   float er = 1.f;
   float eg = 0.22f + 0.20f * intensity;
   float eb = 0.28f + 0.15f * intensity;
   glDisable(GL_TEXTURE_2D);
-  const float thick = 3.5f + 2.0f * intensity; // solid edge thickness (px)
+  const float thick = 3.5f + 2.0f * intensity;
   drawRect(x, y, w, thick, er, eg, eb, a);                    // top
   drawRect(x, y + h - thick, w, thick, er, eg, eb, a);        // bottom
   drawRect(x, y, thick, h, er, eg, eb, a);                    // left
@@ -927,8 +943,8 @@ void MainMenu::drawButton(const Btn& b, bool hover) {
     drawMenuBorder(b.x, b.y, b.w, b.h,
                    (hover ? 0.55f : 0.25f) + 0.55f * pulseBright_);
   }
-  // Centered label
-  const float labelScale = 2.5f;
+  // Centered label — heavier type when responsive (reads in motion); 2.0 when static
+  const float labelScale = pulseEnabled_ ? 2.5f : 2.0f;
   float tw = stb_easy_font_width((char*)b.label) * labelScale;
   float th = 8.f * labelScale; // stb_easy_font baseline height ~8
   float tx = b.x + (b.w - tw) * 0.5f;
