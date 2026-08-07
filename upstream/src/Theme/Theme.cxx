@@ -29,7 +29,7 @@ ThemeManager::ThemeManager() : active(THEME_STARSHIP), fxLevel(FX_HIGH) {
     {-0.3f, -0.7f, -0.6f}, 0.4f, 1.0f,
     "music_jungle.wav"
   };
-  // Starship over a star — neon energy trails (blue white / red black)
+  // Starship over a star — neon trails match team palette (white=red / black=purple)
   themes[THEME_STARSHIP] = {
     THEME_STARSHIP,
     "Starship Over a Star",
@@ -41,8 +41,8 @@ ThemeManager::ThemeManager() : active(THEME_STARSHIP), fxLevel(FX_HIGH) {
     {0.95f, 0.93f, 0.88f, 1.f}, {0.75f, 0.28f, 0.12f, 1.f},
     {1.0f, 0.7f, 0.3f}, {0.9f, 0.3f, 0.1f}, {1.0f, 0.5f, 0.1f}, {1.0f, 0.85f, 0.4f},
     MOVE_PARTICLE_NEON,
-    {0.25f, 0.75f, 1.0f}, // white side: electric blue
-    {1.0f, 0.15f, 0.12f}, // black side: neon red
+    {1.0f, 0.15f, 0.12f}, // white side: neon red
+    {0.62f, 0.18f, 0.92f}, // black side: neon purple
     // Light from below-star-ish but with enough lateral component for cel bands
     {-0.35f, -0.55f, -0.75f}, 0.55f, 1.1f,
     // Full track: Nova Chase Orbit (share/nca/audio/music/)
