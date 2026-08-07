@@ -53,7 +53,8 @@ MainMenu::MainMenu()
     musicSensitivity_(0.6f),
     pulseBright_(0.f),
     pulseScale_(1.f),
-    electricBorders_(true),
+    electricBorders_(false),
+    pulseEnabled_(true),
     effectCount_(0),
     effectRedCount_(0),
     effectPurpleCount_(0),
@@ -426,6 +427,11 @@ void MainMenu::setMusicDrive(float level, float sensitivity, float bass) {
 
 void MainMenu::updateMusicPulse(float dt) {
   (void)dt;
+  if (!pulseEnabled_) {
+    pulseBright_ = 0.f;
+    pulseScale_ = 1.f;
+    return;
+  }
   // Full-band music envelope (all instruments). Sensitivity 0 → calm, 1 → strong.
   const float gain = 0.15f + musicSensitivity_ * 1.35f; // 0.15..1.5
   float drive = musicLevel_ * gain;
