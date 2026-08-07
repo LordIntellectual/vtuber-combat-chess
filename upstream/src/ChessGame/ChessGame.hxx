@@ -256,6 +256,13 @@ public:
   bool hasLocalMoveBroadcast() const { return !localMoveBroadcast.empty(); }
   std::string consumeLocalMoveBroadcast();
 
+  /**
+   * True once after any animated move begins (local click, AI, or network
+   * tryApplyUciMove). Main loop uses this for SFX / action camera — network
+   * moves start outside perform(), so state-diff alone misses them.
+   */
+  bool consumeAnimationJustStarted();
+
   /* Destructor */
   ~ChessGame();
 
@@ -265,6 +272,7 @@ private:
   bool aiEnabledBeforeNet = true;
   std::string pendingMoveReq;
   std::string localMoveBroadcast;
+  bool animationJustStarted_ = false;
 
   /** Shared path: begin animated move from start→end (board still has piece). */
   bool beginAnimatedMove(Vector2i start, Vector2i end, int placedPiece,

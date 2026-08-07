@@ -1010,23 +1010,24 @@ int main(int argc, char** argv) {
       }
       hud.setStatus(status);
     }
-    bool startedMoving =
-      (prevState == USER_TURN && st == USER_MOVING) ||
-      (prevState == BLACK_TURN && st == BLACK_MOVING) ||
-      (prevState == AI_TURN && st == AI_MOVING);
+    // Network moves start in tryApplyUciMove (before perform), so rely on
+    // ChessGame's one-shot flag rather than only state-diff across perform().
+    bool startedMoving = game->consumeAnimationJustStarted();
+    if (!startedMoving) {
+      startedMoving =
+        (prevState == USER_TURN && st == USER_MOVING) ||
+        (prevState == BLACK_TURN && st == BLACK_MOVING) ||
+        (prevState == AI_TURN && st == AI_MOVING);
+    }
     // Acknowledge: piece ordered to move (occupied tile or empty)
-    if (prevState == USER_TURN && st == USER_MOVING) {
+    if (startedMoving) {
       audio.playSfx("sfx_acknowledge");
-      std::cout << "[VCC] Move " << game->getLastUserMove() << "\n";
+      if (st == USER_MOVING || st == BLACK_MOVING)
+        std::cout << "[VCC] Move " << game->getLastUserMove() << "\n";
+      if (st == AI_MOVING)
+        hud.setEvent("AI moved");
     }
-    if (prevState == BLACK_TURN && st == BLACK_MOVING) {
-      audio.playSfx("sfx_acknowledge");
-    }
-    if (prevState == AI_TURN && st == AI_MOVING) {
-      audio.playSfx("sfx_acknowledge");
-      hud.setEvent("AI moved");
-    }
-    // Capture-only action camera (Settings → Video)
+    // Capture-only action camera (Settings → Video) — all sides, including net
     if (!settings.actionCameraEnabled() && actionCam.isActive()) {
       actionCam.cancel(camera);
     }
