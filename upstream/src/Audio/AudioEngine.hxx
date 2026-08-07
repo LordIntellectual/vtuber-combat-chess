@@ -45,6 +45,10 @@ public:
   float musicVolume() const { return musicVol; }
   float sfxVolume() const { return sfxVol; }
 
+  /** Smoothed 0..1 levels from the currently playing music (for UI pulse / FX). */
+  float musicLevel() const { return levelSmooth; }
+  float musicBassLevel() const { return bassSmooth; }
+
 private:
   bool ready;
   bool musicOn;
@@ -62,6 +66,10 @@ private:
   float fadeDur;
   bool fading;
   std::string currentFile;
+  std::string analysisAbsPath;
+  void* analysisDecoder; // ma_decoder* — PCM peek for reactive UI
+  float levelSmooth;
+  float bassSmooth;
   std::map<std::string, std::string> sfxPaths;
   std::vector<ma_sound*> activeSfx;
 
@@ -70,6 +78,9 @@ private:
   void destroySound(void*& slot);
   bool loadMusicSound(const std::string& filename, void*& outSlot, std::string& resolvedPath);
   float musicTargetVolume() const;
+  void openMusicAnalysis(const std::string& absPath);
+  void closeMusicAnalysis();
+  void updateMusicAnalysis();
 };
 
 #endif

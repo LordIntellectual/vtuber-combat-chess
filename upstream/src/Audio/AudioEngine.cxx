@@ -12,7 +12,8 @@ AudioEngine::AudioEngine()
     masterVol(0.9f), musicVol(0.45f), sfxVol(0.7f),
     engine(nullptr), musicSound(nullptr), musicFadeOut(nullptr),
     musicGain(1.f), fadeOutGain(0.f), fadeT(0.f), fadeDur(1.6f),
-    fading(false) {}
+    fading(false), analysisDecoder(nullptr),
+    levelSmooth(0.f), bassSmooth(0.f) {}
 
 AudioEngine::~AudioEngine() { shutdown(); }
 
@@ -67,6 +68,7 @@ void AudioEngine::shutdown() {
   }
   activeSfx.clear();
 
+  closeMusicAnalysis();
   destroySound(musicFadeOut);
   destroySound(musicSound);
   fading = false;
@@ -78,6 +80,90 @@ void AudioEngine::shutdown() {
     engine = nullptr;
   }
   ready = false;
+}
+
+void AudioEngine::closeMusicAnalysis() {
+  if (analysisDecoder) {
+    ma_decoder_uninit((ma_decoder*)analysisDecoder);
+    delete (ma_decoder*)analysisDecoder;
+    analysisDecoder = nullptr;
+  }
+  analysisAbsPath.clear();
+  levelSmooth = 0.f;
+  bassSmooth = 0.f;
+}
+
+void AudioEngine::openMusicAnalysis(const std::string& absPath) {
+  if (absPath.empty()) {
+    closeMusicAnalysis();
+    return;
+  }
+  if (analysisDecoder && analysisAbsPath == absPath) return;
+  closeMusicAnalysis();
+
+  ma_decoder_config cfg = ma_decoder_config_init_default();
+  cfg.format = ma_format_f32;
+  cfg.channels = 2;
+  ma_decoder* dec = new ma_decoder();
+  if (ma_decoder_init_file(absPath.c_str(), &cfg, dec) != MA_SUCCESS) {
+    delete dec;
+    std::cerr << "[Audio] Analysis decoder failed: " << absPath << "\n";
+    return;
+  }
+  analysisDecoder = dec;
+  analysisAbsPath = absPath;
+}
+
+void AudioEngine::updateMusicAnalysis() {
+  if (!musicSound || !analysisDecoder || !musicOn) {
+    // Decay toward silence when no music
+    levelSmooth *= 0.90f;
+    bassSmooth *= 0.90f;
+    return;
+  }
+
+  ma_uint64 cursor = 0;
+  if (ma_sound_get_cursor_in_pcm_frames((ma_sound*)musicSound, &cursor) != MA_SUCCESS)
+    return;
+
+  ma_decoder* dec = (ma_decoder*)analysisDecoder;
+  // Peek a short window of PCM around the playhead
+  const ma_uint64 win = 1024;
+  ma_uint64 seek = (cursor > win / 2) ? (cursor - win / 2) : 0;
+  if (ma_decoder_seek_to_pcm_frame(dec, seek) != MA_SUCCESS) return;
+
+  float buf[1024 * 2];
+  ma_uint64 framesRead = 0;
+  if (ma_decoder_read_pcm_frames(dec, buf, win, &framesRead) != MA_SUCCESS || framesRead < 32)
+    return;
+
+  // Mono RMS + crude bass (exponential low-pass then RMS of abs)
+  double sumSq = 0.0;
+  double sumBassSq = 0.0;
+  float lp = 0.f;
+  const float a = 0.12f; // low-pass coefficient (~bass emphasis)
+  for (ma_uint64 i = 0; i < framesRead; ++i) {
+    float L = buf[i * 2 + 0];
+    float R = buf[i * 2 + 1];
+    float m = 0.5f * (L + R);
+    sumSq += (double)m * (double)m;
+    lp = lp + a * (m - lp);
+    sumBassSq += (double)lp * (double)lp;
+  }
+  float rms = (float)std::sqrt(sumSq / (double)framesRead);
+  float bass = (float)std::sqrt(sumBassSq / (double)framesRead);
+
+  // Normalise — full tracks often sit low; boost then clamp
+  rms = std::min(1.f, rms * 4.5f);
+  bass = std::min(1.f, bass * 6.5f);
+
+  // Attack / release envelope (punchy bass for techno)
+  auto env = [](float cur, float target, float attack, float release) {
+    float k = (target > cur) ? attack : release;
+    return cur + (target - cur) * k;
+  };
+  levelSmooth = env(levelSmooth, rms, 0.45f, 0.12f);
+  bassSmooth = env(bassSmooth, bass, 0.55f, 0.10f);
 }
 
 float AudioEngine::musicTargetVolume() const {
@@ -116,24 +202,27 @@ void AudioEngine::update(float dt) {
   if (!ready) return;
   pruneSfx();
 
-  if (!fading) return;
-  if (dt < 0.f) dt = 0.f;
-  if (dt > 0.1f) dt = 0.1f;
-  fadeT += dt;
-  float t = (fadeDur > 1e-4f) ? (fadeT / fadeDur) : 1.f;
-  if (t >= 1.f) {
-    t = 1.f;
-    musicGain = 1.f;
-    fadeOutGain = 0.f;
-    destroySound(musicFadeOut);
-    fading = false;
-  } else {
-    // Smoothstep for a less linear crossfade
-    float s = t * t * (3.f - 2.f * t);
-    musicGain = s;
-    fadeOutGain = 1.f - s;
+  if (fading) {
+    if (dt < 0.f) dt = 0.f;
+    if (dt > 0.1f) dt = 0.1f;
+    fadeT += dt;
+    float t = (fadeDur > 1e-4f) ? (fadeT / fadeDur) : 1.f;
+    if (t >= 1.f) {
+      t = 1.f;
+      musicGain = 1.f;
+      fadeOutGain = 0.f;
+      destroySound(musicFadeOut);
+      fading = false;
+    } else {
+      // Smoothstep for a less linear crossfade
+      float s = t * t * (3.f - 2.f * t);
+      musicGain = s;
+      fadeOutGain = 1.f - s;
+    }
+    applyVolumes();
   }
-  applyVolumes();
+
+  updateMusicAnalysis();
 }
 
 void AudioEngine::playSfx(const std::string& name) {
@@ -205,6 +294,7 @@ void AudioEngine::playMusic(const std::string& filename) {
   fading = false;
   applyVolumes();
   ma_sound_start((ma_sound*)musicSound);
+  openMusicAnalysis(resolved);
   std::cout << "[Audio] Music: " << resolved << " (looping)\n";
 }
 
@@ -262,11 +352,13 @@ void AudioEngine::crossfadeMusic(const std::string& filename, float durationSec)
   fading = true;
   applyVolumes();
   ma_sound_start((ma_sound*)musicSound);
+  openMusicAnalysis(resolved);
   std::cout << "[Audio] Crossfade → " << resolved
             << " (" << fadeDur << "s)\n";
 }
 
 void AudioEngine::stopMusic() {
+  closeMusicAnalysis();
   destroySound(musicFadeOut);
   destroySound(musicSound);
   musicFullTrack = false;

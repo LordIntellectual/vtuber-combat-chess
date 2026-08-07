@@ -1333,6 +1333,8 @@ int main(int argc, char** argv) {
       }
     }
 
+    // Bass-reactive menu chrome (pulse + electric borders)
+    mainMenu.setMusicDrive(audio.musicLevel(), audio.musicBassLevel());
     mainMenu.draw(width, height);
     settings.draw(width, height);
     if (pieceEditor.isOpen())
